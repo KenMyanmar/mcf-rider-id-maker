@@ -52,7 +52,12 @@ export const requireStaff = createMiddleware({ type: "function" })
       .from("mcf_card_staff")
       .select("user_id, active, display_name, email")
       .eq("user_id", context.userId)
-      .maybeSingle();
+      .maybeSingle<{
+        user_id: string;
+        active: boolean;
+        display_name: string | null;
+        email: string | null;
+      }>();
 
     if (error) {
       throw new Response(`Staff lookup failed: ${error.message}`, { status: 500 });
