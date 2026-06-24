@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Database } from "./types";
+import type { Database } from "@/lib/db-types";
 
 // Public anon/publishable key — safe to ship to browser.
 export const SUPABASE_URL = "https://iqhplmlwxwrkggvzvovf.supabase.co";
