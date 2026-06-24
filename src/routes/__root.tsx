@@ -11,6 +11,13 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Toaster } from "../components/ui/sonner";
+
+// Self-hosted Burmese font (Unicode complex-script shaping).
+// Pyidaungsu is not on npm; Noto Sans Myanmar is the same shaping engine.
+import "@fontsource/noto-sans-myanmar/400.css";
+import "@fontsource/noto-sans-myanmar/600.css";
+import "@fontsource/noto-sans-myanmar/700.css";
 
 function NotFoundComponent() {
   return (
@@ -120,6 +127,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster position="top-right" />
     </QueryClientProvider>
   );
 }
