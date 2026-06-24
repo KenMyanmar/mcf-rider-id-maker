@@ -95,17 +95,20 @@ export const issueRiderCard = createServerFn({ method: "POST" })
   .middleware([requireStaff])
   .inputValidator((input: z.input<typeof IssueInput>) => IssueInput.parse(input))
   .handler(async ({ data, context }) => {
-    const { data: row, error } = await context.supabase
-      .from("mcf_rider_cards")
-      .upsert(
-        {
-          ...data,
-          issued_by: context.userId,
-          issued_at: data.status === "issued" ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "registration_no" },
-      )
+    const payload = {
+      ...data,
+      issued_by: context.userId,
+      issued_at: data.status === "issued" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: row, error } = await (context.supabase
+      .from("mcf_rider_cards") as unknown as {
+        upsert: (
+          v: typeof payload,
+          opts: { onConflict: string },
+        ) => { select: (cols: string) => { single: () => Promise<{ data: McfRiderCardRow; error: { message: string } | null }> } };
+      })
+      .upsert(payload, { onConflict: "registration_no" })
       .select("*")
       .single();
     if (error) throw new Error(error.message);
