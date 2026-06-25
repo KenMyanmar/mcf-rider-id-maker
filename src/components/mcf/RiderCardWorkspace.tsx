@@ -134,12 +134,16 @@ export function RiderCardWorkspace({ initialReg }: Props) {
       setSaveState("saving");
       setLastError(null);
       try {
+        const clean = (s: string | null | undefined) => {
+          const t = (s ?? "").trim();
+          return t === "" || /^(none|n\/a|na|-)$/i.test(t) ? null : t;
+        };
         const row = await issue({
           data: {
             registration_no: reg,
             member_no: next.member_no || null,
-            bib_no: next.bib_no || null,
-            rfid_tag: next.rfid_tag || null,
+            bib_no: clean(next.bib_no),
+            rfid_tag: clean(next.rfid_tag),
             nrc: next.nrc || null,
             dob: next.dob || null,
             uci_id: next.uci_id || null,
@@ -152,6 +156,9 @@ export function RiderCardWorkspace({ initialReg }: Props) {
         });
         setCard(row);
         setSaveState("saved");
+        if (status === "issued") {
+          toast.success(`Card issued — ${rider?.name_en ?? reg}`);
+        }
       } catch (e) {
         const msg = (e as Error).message;
         setLastError(msg);
@@ -159,7 +166,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
         toast.error(msg);
       }
     },
-    [reg, issue, isWithdrawn],
+    [reg, issue, isWithdrawn, rider?.name_en],
   );
 
   function updateField<K extends keyof CardDraft>(k: K, v: CardDraft[K]) {
@@ -330,6 +337,11 @@ export function RiderCardWorkspace({ initialReg }: Props) {
               <Button onClick={() => void onIssue()} disabled={isWithdrawn}>
                 Issue card
               </Button>
+              {card?.status === "issued" ? (
+                <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+                  Issued ✓
+                </span>
+              ) : null}
               {lastError ? <span className="text-xs text-red-700">{lastError}</span> : null}
             </div>
           </div>
