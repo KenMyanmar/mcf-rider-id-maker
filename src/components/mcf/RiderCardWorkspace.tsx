@@ -220,7 +220,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
 
   function pickRider(r: string) {
     setReg(r);
-    void navigate({ to: "/_authenticated/work/$reg" as never, params: { reg: r } as never }).catch(() => undefined);
+    void navigate({ to: "/work/$reg", params: { reg: r } }).catch(() => undefined);
   }
 
   // Preview merges draft into card so the card-as-UI reflects live edits.
@@ -283,7 +283,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
                   variant="ghost"
                   onClick={() =>
                     window.open(
-                      `/_authenticated/print/${encodeURIComponent(reg ?? "")}`,
+                      `/print/${encodeURIComponent(reg ?? "")}`,
                       "_blank",
                     )
                   }
