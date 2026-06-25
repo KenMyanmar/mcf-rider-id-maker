@@ -1,32 +1,48 @@
-# Fix rider-card navigation 404
+## Harden Issue write in RiderCardWorkspace
 
-## Diagnosis (confirmed)
+Single-file change: `src/components/mcf/RiderCardWorkspace.tsx`.
 
-`_authenticated` is a pathless layout segment, so it is stripped from URLs. The real route fullPaths in `routeTree.gen.ts` are `/work/$reg` and `/print/$reg`. Two call sites in `src/components/mcf/RiderCardWorkspace.tsx` navigate to the literal `/_authenticated/...` path (forced past TypeScript with `as never`) and 404. No route files are missing — only these two URL strings are wrong.
+### 1. Normalize placeholder bib/RFID values
 
-## Changes
+Add a `clean()` helper inside `persistDraft` (or module scope) that maps empty strings and common placeholders (`none`, `n/a`, `na`, `-`) to `null`, so typed sentinels don't collide with the unique constraint on `bib_no` / `rfid_tag`.
 
-**File:** `src/components/mcf/RiderCardWorkspace.tsx` — only this file.
+```ts
+const clean = (s: string | null | undefined) => {
+  const t = (s ?? "").trim();
+  return t === "" || /^(none|n\/a|na|-)$/i.test(t) ? null : t;
+};
+```
 
-1. `pickRider` — drop the `_authenticated` prefix and the `as never` casts:
+Apply to `bib_no` and `rfid_tag` in the `issue({ data: { ... } })` payload. Leave other fields using the existing `value || null` pattern.
 
-   ```tsx
-   function pickRider(r: string) {
-     setReg(r);
-     void navigate({ to: "/work/$reg", params: { reg: r } }).catch(() => undefined);
-   }
-   ```
+### 2. Success toast on issue
 
-2. Print button `window.open` target:
+In `persistDraft`, after a successful `issue()` call, branch on `status`:
 
-   ```tsx
-   window.open(`/print/${encodeURIComponent(reg ?? "")}`, "_blank")
-   ```
+- `status === "issued"` → `toast.success(\`Card issued — ${rider?.name_en ?? reg}\`)`
+- `status === "draft"` → keep silent (the SaveStatusChip already shows "Saved")
 
-No changes under `src/routes/`. No server-function, schema, or styling changes.
+Photo-only saves currently call `persistDraft` with the prior status, so this won't double-fire the issued toast on a photo capture against a draft card.
 
-## Verification
+### 3. "Issued ✓" badge near action buttons
 
-- Typecheck must pass without the `as never` casts (proves the path is in the real `to` union).
-- Manual: search → click rider → URL becomes `/work/<reg>`, card populates, no 404. Click "Print page" → `/print/<reg>` opens chromeless view.
-- After this lands, run the full pass: search → pick → photo capture → Issue card (exercises bib/RFID write, withdrawn trigger, and service-role photo upload — still unverified end to end).
+When `card?.status === "issued"`, render a small green badge inline with the Save/Issue buttons:
+
+```tsx
+{card?.status === "issued" ? (
+  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
+    Issued ✓
+  </span>
+) : null}
+```
+
+Placed in the same flex row as `Save draft` / `Issue card`, after the buttons and before `lastError`.
+
+### Out of scope
+
+No schema, route, server-function, or styling-system changes. No edits to other components.
+
+### Verification
+
+- Typecheck passes.
+- Manual: enter `N/A` in RFID, click Issue → row saves with `rfid_tag = null` (no unique-constraint error), green toast appears, "Issued ✓" badge shows next to the buttons. Re-open rider → badge persists from loaded `card.status`.
