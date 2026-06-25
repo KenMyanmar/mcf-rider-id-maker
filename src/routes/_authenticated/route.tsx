@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { TopBar } from "@/components/mcf/TopBar";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -10,5 +11,15 @@ export const Route = createFileRoute("/_authenticated")({
     }
     return { user: data.user };
   },
-  component: () => <Outlet />,
+  component: AuthedLayout,
 });
+
+function AuthedLayout() {
+  const { user } = Route.useRouteContext();
+  return (
+    <div className="min-h-screen bg-neutral-50">
+      <TopBar email={user?.email ?? null} />
+      <Outlet />
+    </div>
+  );
+}
