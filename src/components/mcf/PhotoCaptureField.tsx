@@ -29,7 +29,6 @@ export function PhotoCapturePicker({ onCaptured }: Props) {
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         onChange={onChange}
         className="hidden"
       />

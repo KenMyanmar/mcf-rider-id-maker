@@ -1,48 +1,35 @@
-## Harden Issue write in RiderCardWorkspace
+## Remove `capture="environment"` from PhotoCapturePicker
 
-Single-file change: `src/components/mcf/RiderCardWorkspace.tsx`.
+Single-file, single-attribute change in `src/components/mcf/PhotoCaptureField.tsx`.
 
-### 1. Normalize placeholder bib/RFID values
+### Change
 
-Add a `clean()` helper inside `persistDraft` (or module scope) that maps empty strings and common placeholders (`none`, `n/a`, `na`, `-`) to `null`, so typed sentinels don't collide with the unique constraint on `bib_no` / `rfid_tag`.
+Delete the `capture="environment"` attribute on the hidden `<input>`. Everything else (ref, `type="file"`, `accept="image/*"`, `onChange`, `className="hidden"`, the `cropTo35x45` pipeline, button, and `loadImage` helper) stays byte-for-byte identical.
 
-```ts
-const clean = (s: string | null | undefined) => {
-  const t = (s ?? "").trim();
-  return t === "" || /^(none|n\/a|na|-)$/i.test(t) ? null : t;
-};
-```
-
-Apply to `bib_no` and `rfid_tag` in the `issue({ data: { ... } })` payload. Leave other fields using the existing `value || null` pattern.
-
-### 2. Success toast on issue
-
-In `persistDraft`, after a successful `issue()` call, branch on `status`:
-
-- `status === "issued"` → `toast.success(\`Card issued — ${rider?.name_en ?? reg}\`)`
-- `status === "draft"` → keep silent (the SaveStatusChip already shows "Saved")
-
-Photo-only saves currently call `persistDraft` with the prior status, so this won't double-fire the issued toast on a photo capture against a draft card.
-
-### 3. "Issued ✓" badge near action buttons
-
-When `card?.status === "issued"`, render a small green badge inline with the Save/Issue buttons:
+Result:
 
 ```tsx
-{card?.status === "issued" ? (
-  <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">
-    Issued ✓
-  </span>
-) : null}
+<input
+  ref={inputRef}
+  type="file"
+  accept="image/*"
+  onChange={onChange}
+  className="hidden"
+/>
 ```
 
-Placed in the same flex row as `Save draft` / `Issue card`, after the buttons and before `lastError`.
+### Why this is the right call (world-class check)
+
+- `capture="environment"` is a *hint* that tells mobile browsers to open the rear camera directly and skip the OS chooser — on iOS Safari and most Android browsers it suppresses the "Photo Library / Take Photo / Choose File" sheet entirely. For a rider-card desk where staff often re-use an existing portrait or pick from a synced gallery, that's a real footgun.
+- Removing it restores the native chooser on mobile (camera + library + files) and is a no-op on desktop (which ignores `capture` anyway). No regression for the laptop-at-the-desk flow.
+- `accept="image/*"` is preserved, so the chooser still filters to images, and the camera remains one tap away inside the native sheet.
+- The 35×45 mm crop runs on whatever file is selected, regardless of source — gallery photos go through the same `cropTo35x45` path as camera captures, so output fidelity is unchanged.
 
 ### Out of scope
 
-No schema, route, server-function, or styling-system changes. No edits to other components.
+No changes to crop ratio, JPEG quality, button label, upload pipeline, or any other file.
 
 ### Verification
 
-- Typecheck passes.
-- Manual: enter `N/A` in RFID, click Issue → row saves with `rfid_tag = null` (no unique-constraint error), green toast appears, "Issued ✓" badge shows next to the buttons. Re-open rider → badge persists from loaded `card.status`.
+- Typecheck passes (attribute removal only).
+- Manual: on mobile, tapping "📷 Capture / Retake" opens the native picker with both Camera and Photo Library options; on desktop, the file dialog opens as before; selected image is still cropped to 350×450 and uploaded.
