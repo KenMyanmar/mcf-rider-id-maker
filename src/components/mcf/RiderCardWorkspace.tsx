@@ -283,7 +283,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
                   variant="ghost"
                   onClick={() =>
                     window.open(
-                      `/_authenticated/print/${encodeURIComponent(reg ?? "")}`,
+                      `/print/${encodeURIComponent(reg ?? "")}`,
                       "_blank",
                     )
                   }
