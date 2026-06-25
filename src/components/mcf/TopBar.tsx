@@ -18,7 +18,7 @@ export function TopBar({ email }: { email?: string | null }) {
         .from("mcf_card_staff")
         .select("display_name")
         .eq("user_id", u.user.id)
-        .maybeSingle();
+        .maybeSingle<{ display_name: string | null }>();
       if (!alive) return;
       setName(data?.display_name ?? null);
     })();
