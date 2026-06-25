@@ -254,7 +254,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-4">
       <header className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">MCF Rider Card Desk</h1>
+        <div />
         <SaveStatusChip state={saveState} onRetry={() => void persistDraft(draft, photoPath, "draft")} />
       </header>
 
