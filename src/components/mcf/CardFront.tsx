@@ -77,15 +77,11 @@ export function CardFront({ rider, card, photoUrl, onPhotoClick, innerRef }: Pro
         <div className="text-[8px] font-semibold">UCI</div>
       </div>
 
-      {/* Green band w/ star */}
+      {/* Green band */}
       <div
-        className="absolute left-0 right-0 flex items-center justify-center"
+        className="absolute left-0 right-0"
         style={{ top: 30, height: 22, background: MCF_GREEN }}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-          <polygon points="12,2 14.59,8.36 21.51,8.63 16.18,13.14 17.95,19.84 12,16.27 6.05,19.84 7.82,13.14 2.49,8.63 9.41,8.36" />
-        </svg>
-      </div>
+      />
 
       {/* Body */}
       <div className="absolute left-0 right-0 px-3 pt-1" style={{ top: 52, bottom: 22 }}>
