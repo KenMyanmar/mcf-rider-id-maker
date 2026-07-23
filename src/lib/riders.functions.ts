@@ -283,3 +283,51 @@ export const createRider = createServerFn({ method: "POST" })
       throw e;
     }
   });
+
+const UpdateRiderInput = CreateRiderInput.omit({ confirm_duplicate: true }).extend({
+  registration_no: z.string().min(1),
+});
+
+export const updateRider = createServerFn({ method: "POST" })
+  .middleware([requireStaff])
+  .inputValidator((input: z.input<typeof UpdateRiderInput>) => UpdateRiderInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const trimOrNull = (v: string | null | undefined) => {
+      const t = (v ?? "").trim();
+      return t === "" ? null : t;
+    };
+    const uci = trimOrNull(data.uci_id);
+    const patch: Record<string, string | null> = {
+      name_en: data.name_en.trim(),
+      name_my: trimOrNull(data.name_my),
+      father_name: trimOrNull(data.father_name),
+      phone: data.phone.trim(),
+      nrc_or_passport: trimOrNull(data.nrc_or_passport),
+      dob: trimOrNull(data.dob),
+      gender: trimOrNull(data.gender),
+      address: trimOrNull(data.address),
+      team_club: trimOrNull(data.team_club),
+      final_category: trimOrNull(data.final_category),
+      uci_id: uci,
+      mcf_id: trimOrNull(data.mcf_id),
+      updated_at: new Date().toISOString(),
+    };
+    if (uci) patch.uci_status = "yes";
+
+    const { data: row, error } = await (context.supabase
+      .from("registration_master") as unknown as {
+        update: (v: typeof patch) => {
+          eq: (col: string, val: string) => {
+            select: (cols: string) => {
+              single: () => Promise<{ data: RegistrationMasterRow; error: { message: string } | null }>;
+            };
+          };
+        };
+      })
+      .update(patch)
+      .eq("registration_no", data.registration_no)
+      .select(RIDER_SAFE_COLS)
+      .single();
+    if (error) throw new Error(error.message);
+    return row as RegistrationMasterRow;
+  });
