@@ -23,6 +23,10 @@ export interface RegistrationMasterRow {
   final_category: string | null;
   gender: string | null;
   verification_status: VerificationStatus | null;
+  father_name: string | null;
+  phone: string | null;
+  address: string | null;
+  mcf_id: string | null;
 }
 
 export interface McfRiderCardRow {
