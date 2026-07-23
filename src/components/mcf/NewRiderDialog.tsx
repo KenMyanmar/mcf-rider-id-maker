@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { createRider, findPossibleDuplicates } from "@/lib/riders.functions";
+import { createRider, findPossibleDuplicates, updateRider } from "@/lib/riders.functions";
 import type { RegistrationMasterRow } from "@/lib/db-types";
 import {
   Dialog,
@@ -26,6 +26,9 @@ import {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode?: "create" | "edit";
+  initial?: RegistrationMasterRow | null;
+  onSaved?: (row: RegistrationMasterRow) => void;
 }
 
 type Form = {
@@ -60,23 +63,51 @@ function emptyForm(): Form {
   };
 }
 
+function formFromRider(r: RegistrationMasterRow): Form {
+  return {
+    name_en: r.name_en ?? "",
+    name_my: r.name_my ?? "",
+    father_name: r.father_name ?? "",
+    phone: r.phone ?? "",
+    nrc_or_passport: r.nrc_or_passport ?? "",
+    dob: (r.dob ?? "").split("T")[0] ?? "",
+    gender: r.gender ?? "",
+    address: r.address ?? "",
+    team_club: r.team_club ?? "",
+    final_category: r.final_category ?? "",
+    uci_id: r.uci_id ?? "",
+    mcf_id: r.mcf_id ?? "",
+  };
+}
+
 type Dup = Pick<
   RegistrationMasterRow,
   "registration_no" | "name_en" | "phone" | "team_club" | "verification_status"
 >;
 
-export function NewRiderDialog({ open, onOpenChange }: Props) {
+export function NewRiderDialog({ open, onOpenChange, mode = "create", initial = null, onSaved }: Props) {
   const navigate = useNavigate();
   const create = useServerFn(createRider);
+  const update = useServerFn(updateRider);
   const findDups = useServerFn(findPossibleDuplicates);
-  const [f, setF] = useState<Form>(emptyForm);
+  const [f, setF] = useState<Form>(() => (initial ? formFromRider(initial) : emptyForm()));
   const [dups, setDups] = useState<Dup[]>([]);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  const isEdit = mode === "edit" && !!initial;
+
+  useEffect(() => {
+    if (open) {
+      setF(initial ? formFromRider(initial) : emptyForm());
+      setDups([]);
+      setConfirming(false);
+      setBusy(false);
+    }
+  }, [open, initial]);
 
   function set<K extends keyof Form>(k: K, v: Form[K]) {
     setF((prev) => ({ ...prev, [k]: v }));
-    if (k === "name_en" || k === "phone") {
+    if (!isEdit && (k === "name_en" || k === "phone")) {
       setDups([]);
       setConfirming(false);
     }
@@ -90,6 +121,7 @@ export function NewRiderDialog({ open, onOpenChange }: Props) {
   }
 
   async function checkDups() {
+    if (isEdit) return;
     if (!f.name_en.trim() && !f.phone.trim()) return;
     try {
       const rows = await findDups({
@@ -106,35 +138,43 @@ export function NewRiderDialog({ open, onOpenChange }: Props) {
       toast.error("Name (EN) and Phone are required.");
       return;
     }
-    if (dups.length > 0 && !confirming) {
+    if (!isEdit && dups.length > 0 && !confirming) {
       setConfirming(true);
       return;
     }
     setBusy(true);
     try {
-      const row = await create({
-        data: {
-          name_en: f.name_en,
-          name_my: f.name_my || null,
-          father_name: f.father_name || null,
-          phone: f.phone,
-          nrc_or_passport: f.nrc_or_passport || null,
-          dob: f.dob || null,
-          gender: f.gender || null,
-          address: f.address || null,
-          team_club: f.team_club || null,
-          final_category: f.final_category || null,
-          uci_id: f.uci_id || null,
-          mcf_id: f.mcf_id || null,
-          confirm_duplicate: confirming,
-        },
-      });
-      toast.success(`Rider created — ${row.registration_no}`);
-      onOpenChange(false);
-      reset();
-      void navigate({ to: "/work/$reg", params: { reg: row.registration_no } }).catch(
-        () => undefined,
-      );
+      const payload = {
+        name_en: f.name_en,
+        name_my: f.name_my || null,
+        father_name: f.father_name || null,
+        phone: f.phone,
+        nrc_or_passport: f.nrc_or_passport || null,
+        dob: f.dob || null,
+        gender: f.gender || null,
+        address: f.address || null,
+        team_club: f.team_club || null,
+        final_category: f.final_category || null,
+        uci_id: f.uci_id || null,
+        mcf_id: f.mcf_id || null,
+      };
+      if (isEdit && initial) {
+        const row = await update({
+          data: { ...payload, registration_no: initial.registration_no },
+        });
+        toast.success(`Rider updated — ${row.registration_no}`);
+        onSaved?.(row);
+        onOpenChange(false);
+      } else {
+        const row = await create({ data: { ...payload, confirm_duplicate: confirming } });
+        toast.success(`Rider created — ${row.registration_no}`);
+        onSaved?.(row);
+        onOpenChange(false);
+        reset();
+        void navigate({ to: "/work/$reg", params: { reg: row.registration_no } }).catch(
+          () => undefined,
+        );
+      }
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -152,7 +192,9 @@ export function NewRiderDialog({ open, onOpenChange }: Props) {
     >
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New Rider</DialogTitle>
+          <DialogTitle>
+            {isEdit && initial ? `Edit Rider — ${initial.registration_no}` : "New Rider"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
@@ -237,7 +279,7 @@ export function NewRiderDialog({ open, onOpenChange }: Props) {
           </div>
         </div>
 
-        {dups.length > 0 ? (
+        {!isEdit && dups.length > 0 ? (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
             <div className="font-semibold">
               Possible duplicate{dups.length > 1 ? "s" : ""} — review before creating:
@@ -259,7 +301,13 @@ export function NewRiderDialog({ open, onOpenChange }: Props) {
             Cancel
           </Button>
           <Button onClick={() => void onSubmit()} disabled={busy}>
-            {busy ? "Saving…" : dups.length > 0 && confirming ? "Create anyway" : "Create rider"}
+            {busy
+              ? "Saving…"
+              : isEdit
+                ? "Save changes"
+                : dups.length > 0 && confirming
+                  ? "Create anyway"
+                  : "Create rider"}
           </Button>
         </DialogFooter>
       </DialogContent>
