@@ -20,6 +20,7 @@ import { CardFront } from "./CardFront";
 import { CardBack } from "./CardBack";
 import { PhotoCapturePicker } from "./PhotoCaptureField";
 import { SaveStatusChip, type SaveState } from "./SaveStatusChip";
+import { NewRiderDialog } from "./NewRiderDialog";
 
 interface Props {
   initialReg?: string;
@@ -81,6 +82,7 @@ export function RiderCardWorkspace({ initialReg }: Props) {
   const [photoPath, setPhotoPath] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [lastError, setLastError] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
   const frontRef = useRef<HTMLDivElement>(null);
   const backRef = useRef<HTMLDivElement>(null);
 
@@ -258,7 +260,15 @@ export function RiderCardWorkspace({ initialReg }: Props) {
         <SaveStatusChip state={saveState} onRetry={() => void persistDraft(draft, photoPath, "draft")} />
       </header>
 
-      <RiderSearch onPick={pickRider} autoFocus={!reg} />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <RiderSearch onPick={pickRider} autoFocus={!reg} />
+        </div>
+        <Button onClick={() => setNewOpen(true)} className="h-9 shrink-0">
+          + New Rider
+        </Button>
+      </div>
+      <NewRiderDialog open={newOpen} onOpenChange={setNewOpen} />
 
       {reg && !rider ? (
         <div className="text-sm text-neutral-500">Loading rider…</div>
@@ -344,6 +354,17 @@ export function RiderCardWorkspace({ initialReg }: Props) {
               ) : null}
               {lastError ? <span className="text-xs text-red-700">{lastError}</span> : null}
             </div>
+
+            {(rider.father_name || rider.phone || rider.address) ? (
+              <div className="mt-2 rounded-md border border-neutral-200 bg-white p-3 text-xs text-neutral-700 space-y-1">
+                <div className="font-semibold text-neutral-500 uppercase tracking-wide text-[10px]">
+                  Rider info
+                </div>
+                {rider.father_name ? <div><span className="text-neutral-500">Father:</span> {rider.father_name}</div> : null}
+                {rider.phone ? <div><span className="text-neutral-500">Phone:</span> <span className="font-mono">{rider.phone}</span></div> : null}
+                {rider.address ? <div><span className="text-neutral-500">Address:</span> {rider.address}</div> : null}
+              </div>
+            ) : null}
           </div>
         </div>
       ) : null}
