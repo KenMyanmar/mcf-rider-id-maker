@@ -245,7 +245,7 @@ export const createRider = createServerFn({ method: "POST" })
       submitted_at: new Date().toISOString(),
     };
 
-    async function attemptInsert(): Promise<McfRiderCardRow extends never ? never : RegistrationMasterRow> {
+    async function attemptInsert(): Promise<RegistrationMasterRow> {
       const { data: maxRow, error: maxErr } = await context.supabase
         .from("registration_master")
         .select("registration_no")
@@ -271,14 +271,14 @@ export const createRider = createServerFn({ method: "POST" })
         if (err.code === "23505") throw new Error("__reg_conflict__");
         throw new Error(err.message);
       }
-      return row as unknown as RegistrationMasterRow as never;
+      return row as unknown as RegistrationMasterRow;
     }
 
     try {
-      return (await attemptInsert()) as unknown as RegistrationMasterRow;
+      return await attemptInsert();
     } catch (e) {
       if ((e as Error).message === "__reg_conflict__") {
-        return (await attemptInsert()) as unknown as RegistrationMasterRow;
+        return await attemptInsert();
       }
       throw e;
     }
