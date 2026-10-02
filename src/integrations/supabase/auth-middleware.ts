@@ -100,10 +100,11 @@ export const requireStaffOrOrganizer = createMiddleware({ type: "function" })
       return next({
         context: {
           access: {
-            kind: "staff" as const,
+            kind: "staff" as "staff" | "organizer",
             isAdmin: staffRow.role === "admin",
             displayName: staffRow.display_name,
             email: staffRow.email,
+            eventIds: [] as string[],
           },
         },
       });
@@ -124,8 +125,10 @@ export const requireStaffOrOrganizer = createMiddleware({ type: "function" })
     return next({
       context: {
         access: {
-          kind: "organizer" as const,
+          kind: "organizer" as "staff" | "organizer",
           isAdmin: false,
+          displayName: null,
+          email: context.email,
           eventIds: orgRows.map((r: { event_id: string }) => r.event_id),
         },
       },
