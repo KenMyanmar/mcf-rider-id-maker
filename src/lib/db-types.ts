@@ -113,31 +113,37 @@ export interface Database {
         Row: RegistrationMasterRow;
         Insert: Partial<RegistrationMasterRow> & { registration_no: string };
         Update: Partial<RegistrationMasterRow>;
+        Relationships: [];
       };
       mcf_rider_cards: {
         Row: McfRiderCardRow;
         Insert: Partial<McfRiderCardRow> & { registration_no: string };
         Update: Partial<McfRiderCardRow>;
+        Relationships: [];
       };
       mcf_card_staff: {
         Row: McfCardStaffRow;
         Insert: Partial<McfCardStaffRow> & { user_id: string };
         Update: Partial<McfCardStaffRow>;
+        Relationships: [];
       };
       events: {
         Row: EventRow;
         Insert: Partial<EventRow> & { slug: string };
         Update: Partial<EventRow>;
+        Relationships: [];
       };
       event_registrations: {
         Row: EventRegistrationRow;
         Insert: Partial<EventRegistrationRow> & { event_id: string };
         Update: Partial<EventRegistrationRow>;
+        Relationships: [];
       };
       event_organizers: {
         Row: EventOrganizerRow;
         Insert: Partial<EventOrganizerRow> & { event_id: string };
         Update: Partial<EventOrganizerRow>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
