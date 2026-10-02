@@ -3,7 +3,8 @@ import { useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import type { AccessInfo } from "@/lib/access";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogOut, KeyRound } from "lucide-react";
+import { ChangePasswordDialog } from "./ChangePasswordDialog";
 
 export function TopBar({
   email,
@@ -16,6 +17,7 @@ export function TopBar({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [name, setName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +95,11 @@ export function TopBar({
               </span>
             ) : null}
           </div>
+          <Button size="sm" variant="ghost" onClick={() => setPwOpen(true)} className="gap-1.5">
+            <KeyRound className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Change password</span>
+          </Button>
+          <ChangePasswordDialog open={pwOpen} onOpenChange={setPwOpen} />
           <Button
             size="sm"
             variant="outline"
