@@ -76,3 +76,58 @@ export const requireStaff = createMiddleware({ type: "function" })
       },
     });
   });
+
+/**
+ * Gates a server fn to MCF staff OR an active event organizer. Reads the
+ * user's own rows via RLS (auth.uid()). Used for /events* server functions.
+ */
+export const requireStaffOrOrganizer = createMiddleware({ type: "function" })
+  .middleware([requireSupabaseAuth])
+  .server(async ({ next, context }) => {
+    const { data: staffRow } = await context.supabase
+      .from("mcf_card_staff")
+      .select("user_id, active, display_name, email, role")
+      .eq("user_id", context.userId)
+      .maybeSingle<{
+        user_id: string;
+        active: boolean;
+        display_name: string | null;
+        email: string | null;
+        role: string;
+      }>();
+
+    if (staffRow?.active) {
+      return next({
+        context: {
+          access: {
+            kind: "staff" as const,
+            isAdmin: staffRow.role === "admin",
+            displayName: staffRow.display_name,
+            email: staffRow.email,
+          },
+        },
+      });
+    }
+
+    const { data: orgRows, error: orgErr } = await context.supabase
+      .from("event_organizers")
+      .select("event_id")
+      .eq("user_id", context.userId)
+      .eq("active", true);
+    if (orgErr) {
+      throw new Response(`Organizer lookup failed: ${orgErr.message}`, { status: 500 });
+    }
+    if (!orgRows || orgRows.length === 0) {
+      throw new Response("Forbidden: not staff or an active event organizer", { status: 403 });
+    }
+
+    return next({
+      context: {
+        access: {
+          kind: "organizer" as const,
+          isAdmin: false,
+          eventIds: orgRows.map((r: { event_id: string }) => r.event_id),
+        },
+      },
+    });
+  });
