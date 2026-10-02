@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getAccessInfo } from "@/lib/access";
 import { RegistrationTable } from "@/components/mcf/events/RegistrationTable";
 
-export const Route = createFileRoute("/_authenticated/events/$slug")({
+export const Route = createFileRoute("/_authenticated/events/$slug/")({
   head: () => ({
     meta: [
       { title: "Event Registrations — MCF" },
