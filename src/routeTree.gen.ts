@@ -9,54 +9,54 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedEventsRouteImport } from './routes/_authenticated/events'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWorkRouteImport } from './routes/_authenticated/work'
-import { Route as AuthenticatedEventsSlugRouteImport } from './routes/_authenticated/events.$slug'
-import { Route as AuthenticatedPrintRegRouteImport } from './routes/_authenticated/print.$reg'
+import { Route as AuthenticatedEventsRouteImport } from './routes/_authenticated/events'
 import { Route as AuthenticatedWorkRegRouteImport } from './routes/_authenticated/work.$reg'
+import { Route as AuthenticatedPrintRegRouteImport } from './routes/_authenticated/print.$reg'
+import { Route as AuthenticatedEventsSlugRouteImport } from './routes/_authenticated/events.$slug'
 import { Route as AuthenticatedEventsSlugOrganizersRouteImport } from './routes/_authenticated/events.$slug.organizers'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedEventsRoute = AuthenticatedEventsRouteImport.update({
-  id: '/events',
-  path: '/events',
-  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedWorkRoute = AuthenticatedWorkRouteImport.update({
   id: '/work',
   path: '/work',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedEventsSlugRoute = AuthenticatedEventsSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => AuthenticatedEventsRoute,
-} as any)
-const AuthenticatedPrintRegRoute = AuthenticatedPrintRegRouteImport.update({
-  id: '/print/$reg',
-  path: '/print/$reg',
+const AuthenticatedEventsRoute = AuthenticatedEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedWorkRegRoute = AuthenticatedWorkRegRouteImport.update({
   id: '/$reg',
   path: '/$reg',
   getParentRoute: () => AuthenticatedWorkRoute,
+} as any)
+const AuthenticatedPrintRegRoute = AuthenticatedPrintRegRouteImport.update({
+  id: '/print/$reg',
+  path: '/print/$reg',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEventsSlugRoute = AuthenticatedEventsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => AuthenticatedEventsRoute,
 } as any)
 const AuthenticatedEventsSlugOrganizersRoute =
   AuthenticatedEventsSlugOrganizersRouteImport.update({
@@ -139,11 +139,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -153,19 +153,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/events': {
-      id: '/_authenticated/events'
-      path: '/events'
-      fullPath: '/events'
-      preLoaderRoute: typeof AuthenticatedEventsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/work': {
       id: '/_authenticated/work'
@@ -174,18 +167,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWorkRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/events/$slug': {
-      id: '/_authenticated/events/$slug'
-      path: '/$slug'
-      fullPath: '/events/$slug'
-      preLoaderRoute: typeof AuthenticatedEventsSlugRouteImport
-      parentRoute: typeof AuthenticatedEventsRoute
-    }
-    '/_authenticated/print/$reg': {
-      id: '/_authenticated/print/$reg'
-      path: '/print/$reg'
-      fullPath: '/print/$reg'
-      preLoaderRoute: typeof AuthenticatedPrintRegRouteImport
+    '/_authenticated/events': {
+      id: '/_authenticated/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof AuthenticatedEventsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/work/$reg': {
@@ -194,6 +180,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/work/$reg'
       preLoaderRoute: typeof AuthenticatedWorkRegRouteImport
       parentRoute: typeof AuthenticatedWorkRoute
+    }
+    '/_authenticated/print/$reg': {
+      id: '/_authenticated/print/$reg'
+      path: '/print/$reg'
+      fullPath: '/print/$reg'
+      preLoaderRoute: typeof AuthenticatedPrintRegRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/events/$slug': {
+      id: '/_authenticated/events/$slug'
+      path: '/$slug'
+      fullPath: '/events/$slug'
+      preLoaderRoute: typeof AuthenticatedEventsSlugRouteImport
+      parentRoute: typeof AuthenticatedEventsRoute
     }
     '/_authenticated/events/$slug/organizers': {
       id: '/_authenticated/events/$slug/organizers'
