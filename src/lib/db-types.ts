@@ -54,6 +54,56 @@ export interface McfCardStaffRow {
   email: string | null;
   display_name: string | null;
   active: boolean;
+  role: "staff" | "admin" | string;
+}
+
+export type EventRegistrationStatus =
+  | "registered"
+  | "paid"
+  | "confirmed"
+  | "cancelled"
+  | string;
+
+export interface EventDivision {
+  id: string;
+  label: string;
+  label_mm?: string | null;
+}
+
+export interface EventRow {
+  id: string;
+  slug: string;
+  name_en: string | null;
+  name_mm: string | null;
+  date: string | null;
+  divisions: EventDivision[] | null;
+  published: boolean;
+}
+
+export interface EventRegistrationRow {
+  id: string;
+  event_id: string;
+  reference_no: string | null;
+  full_name: string | null;
+  phone: string | null;
+  division: string | null;
+  team_club: string | null;
+  status: EventRegistrationStatus;
+  status_note: string | null;
+  payment_proof_path: string | null;
+  created_at: string | null;
+  status_updated_by: string | null;
+  status_updated_at: string | null;
+}
+
+export interface EventOrganizerRow {
+  id: string;
+  user_id: string | null;
+  event_id: string;
+  display_name: string | null;
+  email: string | null;
+  active: boolean;
+  created_at: string | null;
 }
 
 export interface Database {
@@ -63,16 +113,37 @@ export interface Database {
         Row: RegistrationMasterRow;
         Insert: Partial<RegistrationMasterRow> & { registration_no: string };
         Update: Partial<RegistrationMasterRow>;
+        Relationships: [];
       };
       mcf_rider_cards: {
         Row: McfRiderCardRow;
         Insert: Partial<McfRiderCardRow> & { registration_no: string };
         Update: Partial<McfRiderCardRow>;
+        Relationships: [];
       };
       mcf_card_staff: {
         Row: McfCardStaffRow;
         Insert: Partial<McfCardStaffRow> & { user_id: string };
         Update: Partial<McfCardStaffRow>;
+        Relationships: [];
+      };
+      events: {
+        Row: EventRow;
+        Insert: Partial<EventRow> & { slug: string };
+        Update: Partial<EventRow>;
+        Relationships: [];
+      };
+      event_registrations: {
+        Row: EventRegistrationRow;
+        Insert: Partial<EventRegistrationRow> & { event_id: string };
+        Update: Partial<EventRegistrationRow>;
+        Relationships: [];
+      };
+      event_organizers: {
+        Row: EventOrganizerRow;
+        Insert: Partial<EventOrganizerRow> & { event_id: string };
+        Update: Partial<EventOrganizerRow>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

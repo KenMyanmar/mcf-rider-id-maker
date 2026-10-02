@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { getAccessInfo } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +20,10 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/work" });
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const access = await getAccessInfo(data.user.id);
+      navigate({ to: access.kind === "organizer" ? "/events" : "/work" });
     });
   }, [navigate]);
 
@@ -33,7 +36,9 @@ function AuthPage() {
       toast.error(error.message);
       return;
     }
-    navigate({ to: "/work" });
+    const { data: u } = await supabase.auth.getUser();
+    const access = u.user ? await getAccessInfo(u.user.id) : { kind: "staff" as const };
+    navigate({ to: access.kind === "organizer" ? "/events" : "/work" });
   }
 
   return (
