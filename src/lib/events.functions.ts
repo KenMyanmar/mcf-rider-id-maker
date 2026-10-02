@@ -150,8 +150,19 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
       status: data.status,
       status_note: (data.note ?? "").trim() || null,
     };
-    const { data: row, error } = await context.supabase
-      .from("event_registrations")
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      update: (p: typeof patch) => {
+        eq: (
+          col: string,
+          val: string,
+        ) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    })
       .update(patch)
       .eq("id", data.id)
       .select(
@@ -222,8 +233,14 @@ export const addEventOrganizer = createServerFn({ method: "POST" })
       email: data.email,
       active: true,
     };
-    const { data: row, error } = await supabaseAdmin
-      .from("event_organizers")
+    const { data: row, error } = await (supabaseAdmin
+      .from("event_organizers") as unknown as {
+      insert: (p: typeof payload) => {
+        select: (cols: string) => {
+          single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      };
+    })
       .insert(payload)
       .select("id, user_id, event_id, display_name, email, active, created_at")
       .single();
@@ -239,8 +256,19 @@ export const toggleOrganizerActive = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     requireAdmin(context.access);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: row, error } = await supabaseAdmin
-      .from("event_organizers")
+    const { data: row, error } = await (supabaseAdmin
+      .from("event_organizers") as unknown as {
+      update: (p: { active: boolean }) => {
+        eq: (
+          col: string,
+          val: string,
+        ) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    })
       .update({ active: data.active })
       .eq("id", data.id)
       .select("id, user_id, event_id, display_name, email, active, created_at")
