@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import type { AccessInfo } from "@/lib/access";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
 
-export function TopBar({ email }: { email?: string | null }) {
+export function TopBar({
+  email,
+  access,
+}: {
+  email?: string | null;
+  access?: AccessInfo;
+}) {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [name, setName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -37,6 +45,17 @@ export function TopBar({ email }: { email?: string | null }) {
     }
   }
 
+  const navLink = (to: string, label: string, active: boolean) => (
+    <Link
+      to={to}
+      className={`text-sm font-medium ${
+        active ? "text-neutral-900" : "text-neutral-500 hover:text-neutral-900"
+      }`}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/85 backdrop-blur supports-[backdrop-filter]:bg-white/70">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
@@ -53,6 +72,15 @@ export function TopBar({ email }: { email?: string | null }) {
             </div>
           </div>
         </div>
+
+        <nav className="ml-4 flex items-center gap-4">
+          {access?.kind === "staff"
+            ? navLink("/work", "Card Desk", pathname.startsWith("/work"))
+            : null}
+          {access && access.kind !== "none"
+            ? navLink("/events", "Events", pathname.startsWith("/events"))
+            : null}
+        </nav>
 
         <div className="ml-auto flex items-center gap-3">
           <div className="hidden sm:flex flex-col items-end leading-tight min-w-0">

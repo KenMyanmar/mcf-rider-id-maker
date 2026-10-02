@@ -13,8 +13,11 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedWorkRouteImport } from './routes/_authenticated/work'
+import { Route as AuthenticatedEventsRouteImport } from './routes/_authenticated/events'
 import { Route as AuthenticatedWorkRegRouteImport } from './routes/_authenticated/work.$reg'
 import { Route as AuthenticatedPrintRegRouteImport } from './routes/_authenticated/print.$reg'
+import { Route as AuthenticatedEventsSlugRouteImport } from './routes/_authenticated/events.$slug'
+import { Route as AuthenticatedEventsSlugOrganizersRouteImport } from './routes/_authenticated/events.$slug.organizers'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -35,6 +38,11 @@ const AuthenticatedWorkRoute = AuthenticatedWorkRouteImport.update({
   path: '/work',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEventsRoute = AuthenticatedEventsRouteImport.update({
+  id: '/events',
+  path: '/events',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedWorkRegRoute = AuthenticatedWorkRegRouteImport.update({
   id: '/$reg',
   path: '/$reg',
@@ -45,43 +53,82 @@ const AuthenticatedPrintRegRoute = AuthenticatedPrintRegRouteImport.update({
   path: '/print/$reg',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedEventsSlugRoute = AuthenticatedEventsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => AuthenticatedEventsRoute,
+} as any)
+const AuthenticatedEventsSlugOrganizersRoute =
+  AuthenticatedEventsSlugOrganizersRouteImport.update({
+    id: '/organizers',
+    path: '/organizers',
+    getParentRoute: () => AuthenticatedEventsSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/events': typeof AuthenticatedEventsRouteWithChildren
   '/work': typeof AuthenticatedWorkRouteWithChildren
+  '/events/$slug': typeof AuthenticatedEventsSlugRouteWithChildren
   '/print/$reg': typeof AuthenticatedPrintRegRoute
   '/work/$reg': typeof AuthenticatedWorkRegRoute
+  '/events/$slug/organizers': typeof AuthenticatedEventsSlugOrganizersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/events': typeof AuthenticatedEventsRouteWithChildren
   '/work': typeof AuthenticatedWorkRouteWithChildren
+  '/events/$slug': typeof AuthenticatedEventsSlugRouteWithChildren
   '/print/$reg': typeof AuthenticatedPrintRegRoute
   '/work/$reg': typeof AuthenticatedWorkRegRoute
+  '/events/$slug/organizers': typeof AuthenticatedEventsSlugOrganizersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/_authenticated/events': typeof AuthenticatedEventsRouteWithChildren
   '/_authenticated/work': typeof AuthenticatedWorkRouteWithChildren
+  '/_authenticated/events/$slug': typeof AuthenticatedEventsSlugRouteWithChildren
   '/_authenticated/print/$reg': typeof AuthenticatedPrintRegRoute
   '/_authenticated/work/$reg': typeof AuthenticatedWorkRegRoute
+  '/_authenticated/events/$slug/organizers': typeof AuthenticatedEventsSlugOrganizersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/work' | '/print/$reg' | '/work/$reg'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/events'
+    | '/work'
+    | '/events/$slug'
+    | '/print/$reg'
+    | '/work/$reg'
+    | '/events/$slug/organizers'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/work' | '/print/$reg' | '/work/$reg'
+  to:
+    | '/'
+    | '/auth'
+    | '/events'
+    | '/work'
+    | '/events/$slug'
+    | '/print/$reg'
+    | '/work/$reg'
+    | '/events/$slug/organizers'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/_authenticated/events'
     | '/_authenticated/work'
+    | '/_authenticated/events/$slug'
     | '/_authenticated/print/$reg'
     | '/_authenticated/work/$reg'
+    | '/_authenticated/events/$slug/organizers'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -120,6 +167,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWorkRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/events': {
+      id: '/_authenticated/events'
+      path: '/events'
+      fullPath: '/events'
+      preLoaderRoute: typeof AuthenticatedEventsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/work/$reg': {
       id: '/_authenticated/work/$reg'
       path: '/$reg'
@@ -134,8 +188,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrintRegRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/events/$slug': {
+      id: '/_authenticated/events/$slug'
+      path: '/$slug'
+      fullPath: '/events/$slug'
+      preLoaderRoute: typeof AuthenticatedEventsSlugRouteImport
+      parentRoute: typeof AuthenticatedEventsRoute
+    }
+    '/_authenticated/events/$slug/organizers': {
+      id: '/_authenticated/events/$slug/organizers'
+      path: '/organizers'
+      fullPath: '/events/$slug/organizers'
+      preLoaderRoute: typeof AuthenticatedEventsSlugOrganizersRouteImport
+      parentRoute: typeof AuthenticatedEventsSlugRoute
+    }
   }
 }
+
+interface AuthenticatedEventsSlugRouteChildren {
+  AuthenticatedEventsSlugOrganizersRoute: typeof AuthenticatedEventsSlugOrganizersRoute
+}
+
+const AuthenticatedEventsSlugRouteChildren: AuthenticatedEventsSlugRouteChildren =
+  {
+    AuthenticatedEventsSlugOrganizersRoute:
+      AuthenticatedEventsSlugOrganizersRoute,
+  }
+
+const AuthenticatedEventsSlugRouteWithChildren =
+  AuthenticatedEventsSlugRoute._addFileChildren(
+    AuthenticatedEventsSlugRouteChildren,
+  )
+
+interface AuthenticatedEventsRouteChildren {
+  AuthenticatedEventsSlugRoute: typeof AuthenticatedEventsSlugRouteWithChildren
+}
+
+const AuthenticatedEventsRouteChildren: AuthenticatedEventsRouteChildren = {
+  AuthenticatedEventsSlugRoute: AuthenticatedEventsSlugRouteWithChildren,
+}
+
+const AuthenticatedEventsRouteWithChildren =
+  AuthenticatedEventsRoute._addFileChildren(AuthenticatedEventsRouteChildren)
 
 interface AuthenticatedWorkRouteChildren {
   AuthenticatedWorkRegRoute: typeof AuthenticatedWorkRegRoute
@@ -149,11 +243,13 @@ const AuthenticatedWorkRouteWithChildren =
   AuthenticatedWorkRoute._addFileChildren(AuthenticatedWorkRouteChildren)
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedEventsRoute: typeof AuthenticatedEventsRouteWithChildren
   AuthenticatedWorkRoute: typeof AuthenticatedWorkRouteWithChildren
   AuthenticatedPrintRegRoute: typeof AuthenticatedPrintRegRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedEventsRoute: AuthenticatedEventsRouteWithChildren,
   AuthenticatedWorkRoute: AuthenticatedWorkRouteWithChildren,
   AuthenticatedPrintRegRoute: AuthenticatedPrintRegRoute,
 }
