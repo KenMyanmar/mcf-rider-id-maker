@@ -1,4 +1,6 @@
 # Roadmap
-- [ ] Read-only live login + Events checks on sayagyi.org (password at run time only; sign out; delete script)
-- [ ] Check publish status
-- [ ] Add Change password dialog in top bar
+- [x] Read-only live login + Events checks on sayagyi.org (signed out; script deleted)
+- [x] Check publish status (live site is published)
+- [x] Fix race page not opening from Events
+- [x] Add Change password dialog in top bar
+- [ ] Publish update so fixes reach sayagyi.org (waiting on user)
