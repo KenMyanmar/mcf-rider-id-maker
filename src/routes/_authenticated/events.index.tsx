@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { EventPicker } from "@/components/mcf/events/EventPicker";
 
-export const Route = createFileRoute("/_authenticated/events")({
+export const Route = createFileRoute("/_authenticated/events/")({
   head: () => ({
     meta: [
       { title: "Event Registrations — MCF" },
