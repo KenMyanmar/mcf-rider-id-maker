@@ -94,7 +94,6 @@ export interface EventRegistrationRow {
   created_at: string | null;
   status_updated_by: string | null;
   status_updated_at: string | null;
-  [k: string]: unknown;
 }
 
 export interface EventOrganizerRow {
