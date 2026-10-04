@@ -390,6 +390,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   onSaved={(u) => {
                     setDetail({ ...detail, ...u });
                     setRows((rs) => rs.map((r) => (r.id === u.id ? { ...r, ...u } : r)));
+                    load();
                   }}
                 />
 
