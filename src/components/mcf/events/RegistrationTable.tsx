@@ -245,6 +245,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
               <th className="px-3 py-2">Division</th>
               <th className="px-3 py-2">Team/Club</th>
               <th className="px-3 py-2">Blood</th>
+              <th className="px-3 py-2">Size</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Proof</th>
               <th className="px-3 py-2">Created</th>
@@ -383,6 +384,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                 <EditRegistrationDialog
                   row={detail}
                   divisions={divisions}
+                  shirtSizes={event?.shirt_sizes ?? []}
                   open={editOpen}
                   onOpenChange={setEditOpen}
                   onSaved={(u) => {
