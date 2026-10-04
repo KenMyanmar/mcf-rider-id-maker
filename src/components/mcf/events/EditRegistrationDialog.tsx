@@ -19,6 +19,9 @@ type Form = {
   team_club: string;
   note: string;
   blood_type: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  shirt_size: string;
 };
 
 function toForm(r: EventRegistrationRow): Form {
@@ -33,18 +36,23 @@ function toForm(r: EventRegistrationRow): Form {
     team_club: r.team_club ?? "",
     note: r.note ?? "",
     blood_type: r.blood_type ?? "",
+    emergency_contact_name: r.emergency_contact_name ?? "",
+    emergency_contact_phone: r.emergency_contact_phone ?? "",
+    shirt_size: r.shirt_size ?? "",
   };
 }
 
 export function EditRegistrationDialog({
   row,
   divisions,
+  shirtSizes,
   open,
   onOpenChange,
   onSaved,
 }: {
   row: EventRegistrationRow;
   divisions: EventDivision[];
+  shirtSizes: string[];
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSaved: (r: EventRegistrationRow) => void;
@@ -108,7 +116,7 @@ export function EditRegistrationDialog({
               <option value="">—</option>
               {divisions.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.label_mm ? `${d.label_mm} (${d.label})` : d.label}
+                  {d.mm && d.en ? `${d.mm} (${d.en})` : (d.mm ?? d.en ?? d.id)}
                 </option>
               ))}
             </select>
@@ -125,6 +133,21 @@ export function EditRegistrationDialog({
               ))}
             </select>
           </div>
+          {shirtSizes.length > 0 ? (
+            <div>
+              <Label htmlFor="er-size">Shirt size</Label>
+              <select id="er-size" value={f.shirt_size} onChange={set("shirt_size")} className={sel}>
+                <option value="">—</option>
+                {shirtSizes.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {field("emergency_contact_name", "Emergency contact name", { maxLength: 120 })}
+          {field("emergency_contact_phone", "Emergency contact phone", { pattern: "[0-9+\\- ]{5,30}", inputMode: "tel" })}
           <div className="sm:col-span-2">{field("address", "Address")}</div>
           <div className="sm:col-span-2">{field("note", "Note")}</div>
           <DialogFooter className="sm:col-span-2">

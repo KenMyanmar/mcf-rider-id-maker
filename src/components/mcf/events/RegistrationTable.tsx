@@ -16,10 +16,27 @@ import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
 import { EditRegistrationDialog } from "./EditRegistrationDialog";
 import { Download, Search, Eye, X } from "lucide-react";
 
+function findDivision(event: EventRow | null, id: string | null): EventDivision | undefined {
+  if (!id) return undefined;
+  return (event?.divisions ?? []).find((x: EventDivision) => x.id === id);
+}
+
 function divisionLabel(event: EventRow | null, id: string | null): string {
   if (!id) return "—";
-  const d = (event?.divisions ?? []).find((x: EventDivision) => x.id === id);
-  return d ? (d.label_mm ?? d.label) : id;
+  const d = findDivision(event, id);
+  return d ? (d.mm ?? d.en ?? d.id) : id;
+}
+
+function divisionEn(event: EventRow | null, id: string | null): string {
+  if (!id) return "";
+  const d = findDivision(event, id);
+  return d ? (d.en ?? d.id) : id;
+}
+
+function divisionMm(event: EventRow | null, id: string | null): string {
+  if (!id) return "";
+  const d = findDivision(event, id);
+  return d ? (d.mm ?? d.en ?? d.id) : id;
 }
 
 function bloodLabel(v: string | null | undefined): string {
@@ -49,6 +66,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [sizeCounts, setSizeCounts] = useState<Record<string, number>>({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -61,9 +79,14 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       },
     })
       .then((r) => {
-        const res = r as { event: EventRow; registrations: EventRegistrationRow[] };
+        const res = r as {
+          event: EventRow;
+          registrations: EventRegistrationRow[];
+          sizeCounts: Record<string, number>;
+        };
         setEvent(res.event);
         setRows(res.registrations);
+        setSizeCounts(res.sizeCounts ?? {});
         setError(null);
       })
       .catch((e) => setError((e as Error).message))
@@ -136,9 +159,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       Reference: r.reference_no ?? "",
       Name: r.full_name ?? "",
       Phone: r.phone ?? "",
-      Division: divisionLabel(event, r.division),
+      Division: divisionEn(event, r.division),
+      "Division (MM)": divisionMm(event, r.division),
       "Team/Club": r.team_club ?? "",
       "Blood type": r.blood_type ? bloodLabel(r.blood_type) : "",
+      "Shirt size": r.shirt_size ?? "",
+      "Emergency contact name": r.emergency_contact_name ?? "",
+      "Emergency contact phone": r.emergency_contact_phone ?? "",
       Status: statusLabel(r.status).en,
       "Status (MM)": statusLabel(r.status).mm,
       Proof: r.payment_proof_path ? "yes" : "no",
@@ -186,7 +213,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <option value="">All divisions</option>
           {divisions.map((d: EventDivision) => (
             <option key={d.id} value={d.id}>
-              {d.label_mm ?? d.label}
+              {d.mm ?? d.en ?? d.id}
             </option>
           ))}
         </select>
@@ -196,7 +223,17 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         </Button>
       </div>
 
+      {(event?.shirt_sizes ?? []).length > 0 ? (
+        <p className="text-xs text-neutral-600">
+          <span className="font-medium text-neutral-800">Shirt sizes (not cancelled): </span>
+          {(event?.shirt_sizes ?? [])
+            .map((s) => `${s} ${sizeCounts[s] ?? 0}`)
+            .join(" · ")}
+        </p>
+      ) : null}
+
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
 
       <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white">
         <table className="w-full text-sm">
@@ -208,6 +245,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
               <th className="px-3 py-2">Division</th>
               <th className="px-3 py-2">Team/Club</th>
               <th className="px-3 py-2">Blood</th>
+              <th className="px-3 py-2">Size</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Proof</th>
               <th className="px-3 py-2">Created</th>
@@ -217,13 +255,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={11} className="px-3 py-6 text-center text-neutral-400">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={11} className="px-3 py-6 text-center text-neutral-400">
                   No registrations found.
                 </td>
               </tr>
@@ -233,9 +271,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   <td className="px-3 py-2 font-mono text-xs">{r.reference_no ?? "—"}</td>
                   <td className="px-3 py-2 font-medium">{r.full_name ?? "—"}</td>
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
-                  <td className="px-3 py-2">{divisionLabel(event, r.division)}</td>
+                  <td className="px-3 py-2" title={divisionEn(event, r.division)}>
+                    {divisionLabel(event, r.division)}
+                  </td>
                   <td className="px-3 py-2">{r.team_club ?? "—"}</td>
                   <td className="px-3 py-2">{bloodLabel(r.blood_type)}</td>
+                  <td className="px-3 py-2">{r.shirt_size ?? "—"}</td>
                   <td className="px-3 py-2">
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(r.status)}`}
@@ -285,36 +326,31 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ["Division", divisionLabel(event, detail.division)],
                       ["Team/Club", detail.team_club],
                       ["Blood type", bloodLabel(detail.blood_type)],
+                      ["Shirt size", detail.shirt_size ?? null],
+                      ["Emergency contact", detail.emergency_contact_name ?? null],
+                      ["Emergency phone", detail.emergency_contact_phone ? (
+                        <a className="underline underline-offset-2" href={`tel:${detail.emergency_contact_phone}`}>
+                          {detail.emergency_contact_phone}
+                        </a>
+                      ) : null],
+                      ["NRC number", detail.nrc ?? null],
+                      ["Father's name", detail.father_name ?? null],
+                      ["Date of birth", detail.dob ?? null],
+                      ["Address", detail.address ?? null],
+                      ["Note", detail.note ?? null],
+                      ["Waiver accepted", detail.waiver_accepted_at ? new Date(detail.waiver_accepted_at).toLocaleString() : null],
                       ["Created", detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
                       ["Last status change", detail.status_updated_at ? new Date(detail.status_updated_at).toLocaleString() : null],
                       ["Last edited", detail.info_updated_at ? new Date(detail.info_updated_at).toLocaleString() : null],
-                    ] as Array<[string, string | null]>
+                    ] as Array<[string, React.ReactNode]>
                   ).map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-3">
-                      <dt className="text-neutral-500">{k}</dt>
-                      <dd className="font-medium text-right">{v ?? "—"}</dd>
+                      <dt className="text-neutral-500 shrink-0">{k}</dt>
+                      <dd className="font-medium text-right break-words">{v ?? "—"}</dd>
                     </div>
                   ))}
                 </dl>
-                {Object.entries(detail)
-                  .filter(
-                    ([k, v]) =>
-                      v != null &&
-                      v !== "" &&
-                      !k.endsWith("_path") &&
-                      ![
-                        "id", "event_id", "reference_no", "full_name", "phone", "division",
-                        "team_club", "status", "status_note", "payment_proof_path",
-                        "created_at", "status_updated_at", "status_updated_by",
-                        "blood_type", "info_updated_at", "info_updated_by",
-                      ].includes(k),
-                  )
-                  .map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-3 text-sm">
-                      <span className="text-neutral-500">{k}</span>
-                      <span className="font-medium text-right break-all">{String(v)}</span>
-                    </div>
-                  ))}
+
 
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -348,11 +384,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                 <EditRegistrationDialog
                   row={detail}
                   divisions={divisions}
+                  shirtSizes={event?.shirt_sizes ?? []}
                   open={editOpen}
                   onOpenChange={setEditOpen}
                   onSaved={(u) => {
                     setDetail({ ...detail, ...u });
                     setRows((rs) => rs.map((r) => (r.id === u.id ? { ...r, ...u } : r)));
+                    load();
                   }}
                 />
 

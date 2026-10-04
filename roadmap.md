@@ -1,4 +1,4 @@
 # Roadmap
 - [ ] Publish update so fixes reach sayagyi.org (waiting on user)
-- [x] NRC photo links, blood type, Edit rider info in Event Registrations
-- [x] Confirm /work, /work/$reg, /print/$reg unchanged + build passes
+- [x] Division label fix, emergency contact, shirt size, size summary, detail cleanup
+- [x] Confirm build passes + /work, /work/$reg, /print/$reg unchanged
