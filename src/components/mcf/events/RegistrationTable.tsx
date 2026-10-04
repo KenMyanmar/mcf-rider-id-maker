@@ -8,6 +8,7 @@ import {
   getProofSignedUrl,
   getNrcPhotoSignedUrl,
   updateRegistrationStatus,
+  updateRegistrationBib,
 } from "@/lib/events.functions";
 import type { EventRow, EventRegistrationRow, EventDivision } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const fetchProof = useServerFn(getProofSignedUrl);
   const fetchNrc = useServerFn(getNrcPhotoSignedUrl);
   const saveStatus = useServerFn(updateRegistrationStatus);
+  const saveBib = useServerFn(updateRegistrationBib);
+  const [capacity, setCapacity] = useState<Capacity>({ paidConfirmed: 0, registered: 0, bibsByDivision: {} });
+  const [pendingBib, setPendingBib] = useState<Array<{ id: string; full_name: string | null }>>([]);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkReport, setBulkReport] = useState<{ ok: number; failed: Array<{ name: string; reason: string }> } | null>(null);
+  const [sortBib, setSortBib] = useState<"" | "asc" | "desc">("");
+  const [manualBib, setManualBib] = useState("");
 
   const [event, setEvent] = useState<EventRow | null>(null);
   const [rows, setRows] = useState<EventRegistrationRow[]>([]);
@@ -83,7 +91,11 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           event: EventRow;
           registrations: EventRegistrationRow[];
           sizeCounts: Record<string, number>;
+          capacity: Capacity;
+          pendingBib: Array<{ id: string; full_name: string | null }>;
         };
+        setCapacity(res.capacity);
+        setPendingBib(res.pendingBib ?? []);
         setEvent(res.event);
         setRows(res.registrations);
         setSizeCounts(res.sizeCounts ?? {});
@@ -107,6 +119,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       setDetail(row);
       setNewStatus(row.status);
       setNote(row.status_note ?? "");
+      setManualBib(row.bib_no != null ? String(row.bib_no) : "");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -154,8 +167,89 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
     }
   }
 
+  function mergeRow(updated: EventRegistrationRow) {
+    setDetail((d) => (d && d.id === updated.id ? { ...d, ...updated } : d));
+    setRows((rs) => rs.map((r) => (r.id === updated.id ? { ...r, ...updated } : r)));
+  }
+
+  async function issueBib() {
+    if (!detail) return;
+    setSaving(true);
+    try {
+      const updated = (await saveStatus({ data: { id: detail.id, status: "confirmed", note } })) as EventRegistrationRow;
+      mergeRow(updated);
+      setNewStatus(updated.status);
+      setManualBib(updated.bib_no != null ? String(updated.bib_no) : "");
+      toast.success(`Bib ${updated.bib_no ?? "?"} issued — ${updated.full_name ?? ""}`);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function applyManualBib(clear = false) {
+    if (!detail) return;
+    const v = clear ? null : manualBib.trim() === "" ? null : Number(manualBib);
+    if (v !== null && (!Number.isInteger(v) || v <= 0)) {
+      toast.error("Bib must be a whole number");
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = (await saveBib({ data: { id: detail.id, bib_no: v } })) as EventRegistrationRow;
+      mergeRow(updated);
+      setManualBib(updated.bib_no != null ? String(updated.bib_no) : "");
+      toast.success(updated.bib_no != null ? `Bib set to ${updated.bib_no}` : "Bib cleared");
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function issueAll() {
+    const list = pendingBib;
+    if (list.length === 0) return;
+    if (!window.confirm(`Issue bibs to all ${list.length} Paid riders in this race (oldest registration first)?`)) return;
+    setBulkRunning(true);
+    setBulkReport(null);
+    let ok = 0;
+    const failed: Array<{ name: string; reason: string }> = [];
+    for (const r of list) {
+      try {
+        await saveStatus({ data: { id: r.id, status: "confirmed", note: null } });
+        ok++;
+      } catch (e) {
+        failed.push({ name: r.full_name ?? r.id, reason: (e as Error).message });
+      }
+    }
+    setBulkReport({ ok, failed });
+    setBulkRunning(false);
+    toast.message(`Issued ${ok}, failed ${failed.length}`);
+    load();
+  }
+
+  const shownRows = useMemo(() => {
+    if (!sortBib) return rows;
+    const dir = sortBib === "asc" ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      if (a.bib_no == null && b.bib_no == null) return 0;
+      if (a.bib_no == null) return 1;
+      if (b.bib_no == null) return -1;
+      return (a.bib_no - b.bib_no) * dir;
+    });
+  }, [rows, sortBib]);
+
   function exportExcel() {
-    const data = rows.map((r) => ({
+    const anyBib = rows.some((r) => r.bib_no != null);
+    const src = anyBib
+      ? [...rows].sort((a, b) => (a.bib_no ?? Infinity) - (b.bib_no ?? Infinity))
+      : rows;
+    const data = src.map((r) => ({
+      Bib: r.bib_no ?? "",
       Reference: r.reference_no ?? "",
       Name: r.full_name ?? "",
       Phone: r.phone ?? "",
@@ -189,7 +283,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, phone, reference…"
+            placeholder="Search name, phone, reference, bib…"
             className="pl-8 w-64"
           />
         </div>
@@ -199,6 +293,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           className="h-9 rounded-md border border-neutral-200 bg-white px-2 text-sm"
         >
           <option value="">All statuses</option>
+          <option value="paid_no_bib">Paid, no bib</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s).mm} ({statusLabel(s).en})
@@ -232,6 +327,26 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         </p>
       ) : null}
 
+      <CapacityPanel event={event} capacity={capacity} />
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" disabled={bulkRunning || pendingBib.length === 0} onClick={() => void issueAll()}>
+          {bulkRunning ? "Issuing…" : `Issue bibs to all Paid riders (${pendingBib.length})`}
+        </Button>
+        {bulkReport ? (
+          <div className="text-xs text-neutral-700">
+            Issued {bulkReport.ok}, failed {bulkReport.failed.length}
+            {bulkReport.failed.length > 0 ? (
+              <ul className="mt-1 list-disc pl-4 text-rose-700">
+                {bulkReport.failed.map((f, i) => (
+                  <li key={i}>{f.name}: {f.reason}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
 
@@ -239,6 +354,15 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left text-xs text-neutral-500">
+              <th className="px-3 py-2">
+                <button
+                  type="button"
+                  className="font-medium hover:text-neutral-900"
+                  onClick={() => setSortBib((v) => (v === "asc" ? "desc" : v === "desc" ? "" : "asc"))}
+                >
+                  Bib{sortBib === "asc" ? " ▲" : sortBib === "desc" ? " ▼" : ""}
+                </button>
+              </th>
               <th className="px-3 py-2">Reference</th>
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Phone</th>
@@ -255,19 +379,20 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={12} className="px-3 py-6 text-center text-neutral-400">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={12} className="px-3 py-6 text-center text-neutral-400">
                   No registrations found.
                 </td>
               </tr>
             ) : (
-              rows.map((r) => (
+              shownRows.map((r) => (
                 <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50">
+                  <td className="px-3 py-2 font-mono font-semibold">{r.bib_no ?? "—"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.reference_no ?? "—"}</td>
                   <td className="px-3 py-2 font-medium">{r.full_name ?? "—"}</td>
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
@@ -320,6 +445,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                 <dl className="space-y-1.5 text-sm">
                   {(
                     [
+                      ["Bib", detail.bib_no != null ? String(detail.bib_no) : null],
                       ["Reference", detail.reference_no],
                       ["Name", detail.full_name],
                       ["Phone", detail.phone],
@@ -351,6 +477,37 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   ))}
                 </dl>
 
+
+                {detail.status === "paid" && detail.bib_no == null ? (
+                  <Button className="w-full" disabled={saving} onClick={() => void issueBib()}>
+                    Issue bib / နံပါတ်ထုတ်ပေးရန်
+                  </Button>
+                ) : null}
+
+                {detail.status === "paid" || detail.status === "confirmed" ? (
+                  <div className="rounded-lg border border-neutral-200 p-3 space-y-2">
+                    <div className="text-xs font-semibold text-neutral-700">Set bib manually</div>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        step={1}
+                        value={manualBib}
+                        onChange={(e) => setManualBib(e.target.value)}
+                        placeholder="Bib number"
+                      />
+                      <Button size="sm" variant="outline" disabled={saving} onClick={() => void applyManualBib()}>
+                        Save bib
+                      </Button>
+                      {detail.bib_no != null ? (
+                        <Button size="sm" variant="ghost" disabled={saving} onClick={() => void applyManualBib(true)}>
+                          Clear
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -390,6 +547,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   onSaved={(u) => {
                     setDetail({ ...detail, ...u });
                     setRows((rs) => rs.map((r) => (r.id === u.id ? { ...r, ...u } : r)));
+                    setManualBib(u.bib_no != null ? String(u.bib_no) : "");
                     load();
                   }}
                 />
@@ -401,12 +559,18 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                     onChange={(e) => setNewStatus(e.target.value)}
                     className="h-9 w-full rounded-md border border-neutral-200 bg-white px-2 text-sm"
                   >
-                    {STATUS_ORDER.map((s) => (
-                      <option key={s} value={s}>
-                        {statusLabel(s).mm} ({statusLabel(s).en})
-                      </option>
-                    ))}
+                    {STATUS_ORDER.map((s) => {
+                      const blocked = s === "confirmed" && detail.status !== "paid" && detail.status !== "confirmed";
+                      return (
+                        <option key={s} value={s} disabled={blocked}>
+                          {statusLabel(s).mm} ({statusLabel(s).en}){blocked ? " — Mark Paid first" : ""}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {detail.status !== "paid" && detail.status !== "confirmed" ? (
+                    <p className="text-xs text-neutral-500">Confirmed: Mark Paid first.</p>
+                  ) : null}
                   <Input
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
@@ -421,6 +585,57 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+type Capacity = { paidConfirmed: number; registered: number; bibsByDivision: Record<string, number> };
+
+function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: Capacity }) {
+  if (!event) return null;
+  const cap = event.max_participants;
+  const pct = cap ? capacity.paidConfirmed / cap : 0;
+  const divs = (event.divisions ?? []).filter((d) => d.bib_start != null && d.bib_end != null);
+  return (
+    <div className="space-y-2">
+      {cap && pct >= 1 ? (
+        <div className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-800">
+          Cap reached: public registration is now closed. Riders who registered earlier may still pay.
+        </div>
+      ) : cap && pct >= 0.8 ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+          Race is {Math.floor(pct * 100)}% full
+        </div>
+      ) : null}
+      <div className="rounded-xl border border-neutral-200 bg-white p-3 text-sm space-y-2">
+        <div className="flex flex-wrap gap-x-6 gap-y-1">
+          {cap ? (
+            <span>
+              <span className="text-neutral-500">Paid + Confirmed: </span>
+              <span className="font-semibold">{capacity.paidConfirmed} / {cap}</span>
+            </span>
+          ) : null}
+          <span>
+            <span className="text-neutral-500">Registered, not yet paid: </span>
+            <span className="font-semibold">{capacity.registered}</span>
+          </span>
+        </div>
+        {divs.length > 0 ? (
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+            {divs.map((d) => {
+              const size = (d.bib_end as number) - (d.bib_start as number) + 1;
+              const used = capacity.bibsByDivision[d.id] ?? 0;
+              const left = size - used;
+              return (
+                <span key={d.id} className={left <= 5 ? "text-rose-700 font-medium" : "text-neutral-700"}>
+                  {d.en ?? d.mm ?? d.id}: {used} / {size}
+                  {left <= 5 ? ` — only ${Math.max(left, 0)} left` : ""}
+                </span>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
