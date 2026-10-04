@@ -84,37 +84,60 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (data.status) q = q.eq("status", data.status);
+    if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
+    else if (data.status) q = q.eq("status", data.status);
     if (data.division) q = q.eq("division", data.division);
     const search = data.query?.trim();
     if (search) {
       const like = `%${search.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-      q = q.or(
-        [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`].join(","),
-      );
+      const parts = [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`];
+      if (/^\d{1,9}$/.test(search)) parts.push(`bib_no.eq.${Number(search)}`);
+      q = q.or(parts.join(","));
     }
 
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
-    // Size summary: whole event, all non-cancelled, independent of filters.
+    // Whole-event summary, independent of filters.
+    const { data: allRows, error: allErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, full_name, status, division, bib_no, shirt_size, created_at")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: true });
+    if (allErr) throw new Error(allErr.message);
+    type Lite = {
+      id: string;
+      full_name: string | null;
+      status: string;
+      division: string | null;
+      bib_no: number | null;
+      shirt_size: string | null;
+    };
+    const all = (allRows ?? []) as unknown as Lite[];
+
     const sizeCounts: Record<string, number> = {};
-    if ((event.shirt_sizes ?? []).length > 0) {
-      const { data: sizeRows, error: sizeErr } = await context.supabase
-        .from("event_registrations")
-        .select("shirt_size, status")
-        .eq("event_id", event.id)
-        .neq("status", "cancelled");
-      if (sizeErr) throw new Error(sizeErr.message);
-      for (const r of (sizeRows ?? []) as Array<{ shirt_size: string | null }>) {
-        if (r.shirt_size) sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
+    const bibsByDivision: Record<string, number> = {};
+    let paidConfirmed = 0;
+    let registered = 0;
+    const pendingBib: Array<{ id: string; full_name: string | null }> = [];
+    for (const r of all) {
+      if (r.status !== "cancelled" && r.shirt_size) {
+        sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
       }
+      if (r.status === "paid" || r.status === "confirmed") paidConfirmed++;
+      if (r.status === "registered") registered++;
+      if (r.bib_no != null && r.division && r.status !== "cancelled") {
+        bibsByDivision[r.division] = (bibsByDivision[r.division] ?? 0) + 1;
+      }
+      if (r.status === "paid" && r.bib_no == null) pendingBib.push({ id: r.id, full_name: r.full_name });
     }
 
     return {
       event,
       registrations: (rows ?? []) as unknown as EventRegistrationRow[],
       sizeCounts,
+      capacity: { paidConfirmed, registered, bibsByDivision },
+      pendingBib,
     };
   });
 
