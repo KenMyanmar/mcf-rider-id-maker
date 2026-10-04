@@ -78,7 +78,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("event_registrations")
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
@@ -134,6 +134,120 @@ export const getProofSignedUrl = createServerFn({ method: "POST" })
       .createSignedUrl(path, 60);
     if (signErr) throw new Error(signErr.message);
     return { url: signed.signedUrl };
+  });
+
+export const getNrcPhotoSignedUrl = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: { id: string; side: "front" | "back" }) =>
+    z.object({ id: z.string().min(1), side: z.enum(["front", "back"]) }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    const col = data.side === "front" ? "nrc_photo_path" : "nrc_photo_back_path";
+    const { data: row, error } = await context.supabase
+      .from("event_registrations")
+      .select(col)
+      .eq("id", data.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const path = (row as Record<string, string | null> | null)?.[col];
+    if (!path) throw new Error(`No NRC ${data.side} photo on file`);
+    const { data: signed, error: signErr } = await context.supabase.storage
+      .from("event-nrc-photos")
+      .createSignedUrl(path, 60);
+    if (signErr) throw new Error(signErr.message);
+    return { url: signed.signedUrl };
+  });
+
+const opt = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null));
+
+const UpdateInfoInput = z.object({
+  id: z.string().min(1),
+  full_name: z.string().trim().min(2).max(120),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[0-9+\- ]{5,30}$/, "Phone may contain only digits, + and -"),
+  nrc: opt(80),
+  father_name: opt(120),
+  dob: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => {
+      if (!v) return true;
+      const d = new Date(v);
+      return /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(d.getTime()) && d < new Date();
+    }, "Date of birth must be a valid past date"),
+  address: opt(300),
+  division: z.string().min(1),
+  team_club: opt(120),
+  note: opt(500),
+  blood_type: z
+    .enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown", ""])
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
+});
+
+export const updateRegistrationInfo = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: z.input<typeof UpdateInfoInput>) => UpdateInfoInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: cur, error: curErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, event_id, status")
+      .eq("id", data.id)
+      .maybeSingle<{ id: string; event_id: string; status: string }>();
+    if (curErr) throw new Error(curErr.message);
+    if (!cur) throw new Error("Registration not found");
+    if (cur.status === "cancelled") throw new Error("Cancelled registrations cannot be edited");
+
+    const { data: ev, error: evErr } = await context.supabase
+      .from("events")
+      .select("divisions")
+      .eq("id", cur.event_id)
+      .maybeSingle<{ divisions: { id: string }[] | null }>();
+    if (evErr) throw new Error(evErr.message);
+    if (!(ev?.divisions ?? []).some((d) => d.id === data.division)) {
+      throw new Error("Division is not valid for this event");
+    }
+
+    const patch = {
+      full_name: data.full_name,
+      phone: data.phone,
+      nrc: data.nrc,
+      father_name: data.father_name,
+      dob: data.dob,
+      address: data.address,
+      division: data.division,
+      team_club: data.team_club,
+      note: data.note,
+      blood_type: data.blood_type,
+    };
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      update: (p: typeof patch) => {
+        eq: (c: string, v: string) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    })
+      .update(patch)
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+    return row as unknown as EventRegistrationRow;
   });
 
 const UpdateStatusInput = z.object({
