@@ -96,9 +96,25 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
 
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
+
+    // Size summary: whole event, all non-cancelled, independent of filters.
+    const sizeCounts: Record<string, number> = {};
+    if ((event.shirt_sizes ?? []).length > 0) {
+      const { data: sizeRows, error: sizeErr } = await context.supabase
+        .from("event_registrations")
+        .select("shirt_size, status")
+        .eq("event_id", event.id)
+        .neq("status", "cancelled");
+      if (sizeErr) throw new Error(sizeErr.message);
+      for (const r of (sizeRows ?? []) as Array<{ shirt_size: string | null }>) {
+        if (r.shirt_size) sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
+      }
+    }
+
     return {
       event,
       registrations: (rows ?? []) as unknown as EventRegistrationRow[],
+      sizeCounts,
     };
   });
 
@@ -195,6 +211,15 @@ const UpdateInfoInput = z.object({
     .nullable()
     .optional()
     .transform((v) => (v ? v : null)),
+  emergency_contact_name: opt(120),
+  emergency_contact_phone: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => !v || /^[0-9+\- ]{5,30}$/.test(v), "Emergency phone may contain only digits, + and -"),
+  shirt_size: opt(20),
 });
 
 export const updateRegistrationInfo = createServerFn({ method: "POST" })
@@ -212,12 +237,15 @@ export const updateRegistrationInfo = createServerFn({ method: "POST" })
 
     const { data: ev, error: evErr } = await context.supabase
       .from("events")
-      .select("divisions")
+      .select("divisions, shirt_sizes")
       .eq("id", cur.event_id)
-      .maybeSingle<{ divisions: { id: string }[] | null }>();
+      .maybeSingle<{ divisions: { id: string }[] | null; shirt_sizes: string[] | null }>();
     if (evErr) throw new Error(evErr.message);
     if (!(ev?.divisions ?? []).some((d) => d.id === data.division)) {
       throw new Error("Division is not valid for this event");
+    }
+    if (data.shirt_size && !(ev?.shirt_sizes ?? []).includes(data.shirt_size)) {
+      throw new Error("Shirt size is not valid for this event");
     }
 
     const patch = {
@@ -231,6 +259,9 @@ export const updateRegistrationInfo = createServerFn({ method: "POST" })
       team_club: data.team_club,
       note: data.note,
       blood_type: data.blood_type,
+      emergency_contact_name: data.emergency_contact_name,
+      emergency_contact_phone: data.emergency_contact_phone,
+      shirt_size: data.shirt_size,
     };
     const { data: row, error } = await (context.supabase
       .from("event_registrations") as unknown as {
