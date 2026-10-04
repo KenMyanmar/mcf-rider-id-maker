@@ -1,23 +1,42 @@
-# Check the live login and Events, then add Change Password
+# Event Registrations: NRC photos, blood type, edit rider info
 
-## 1. Check the new admin login (live site)
-- Sign in on sayagyi.org as ken@parami.com in a test browser. The password won't be written down or repeated anywhere.
-- Confirm the sign-in lands on the Card Desk, and the top bar shows both "Card Desk" and "Events".
-- Open Events, then the KBZ MTB 2026 card. Confirm the registration list loads and the "Organizers" link shows up.
-- Open the Organizers page and confirm it lists organizers. No invites and no changes to anything.
-- Open one registration and check that "View proof" gives a temporary link. No status changes.
-- If any step fails, report exactly what showed on screen and fix it.
+No database changes. Every read and write uses the signed-in person's own access, and the service-role key is never used.
 
-## 2. Check that the live site is up to date
-- Check the publish settings. If the live site is missing the Events pages, publish the current version so sayagyi.org gets them.
+## What you'll see
+- **Registration detail**:
+  - "View NRC front" and "View NRC back" buttons. Each one appears only when that photo exists, and each opens a link that works for 60 seconds.
+  - Blood type is shown.
+  - "Last edited" shows the time of the last change.
+  - An "Edit rider" button.
+- **Table**: a new Blood type column. It shows "Don't know" for unknown and a dash when empty.
+- **Excel export**: adds Blood type, NRC front (yes/no) and NRC back (yes/no). File locations are never exported.
+- **Edit rider dialog** (for staff and that event's organizer):
+  - Fields: full name, phone, NRC, father's name, date of birth, address, division (from the event's divisions, Myanmar first), team/club, note and blood type.
+  - The button is disabled when the registration is cancelled.
+  - After saving, the row and detail update straight away, including the division label.
 
-## 3. Add a "Change password" screen
-- Add a "Change password" item to the top bar for every signed-in user.
-- A small window asks for the new password twice. It needs at least 8 characters and both entries must match.
-- Saving updates the password for the signed-in account only, then shows a "Password updated" message.
-- Then ken@parami.com can replace 123456 right away, and U Htun Htun Win can set his own password later.
+## Validation (same rules as the public form)
+- Name: 2–120 characters.
+- Phone: digits, + and - only.
+- Date of birth: a real date in the past.
+- Division: must be one of this event's divisions.
+- Blood type: one of A+, A-, B+, B-, AB+, AB-, O+, O-, unknown. I'm assuming these are the nine allowed values; tell me if the database uses different ones.
 
 ## Technical details
-- Run the browser checks with Playwright against https://sayagyi.org. Read the login details from the test script only and never print them.
-- Change password uses `supabase.auth.updateUser({ password })` with the browser session. No service-role key and no database changes.
-- New `ChangePasswordDialog` in `src/components/mcf/`, opened from `TopBar.tsx`.
+- `db-types.ts`: add these to `EventRegistrationRow`:
+  - `blood_type`, `nrc_photo_path`, `nrc_photo_uploaded_at`
+  - `nrc_photo_back_path`, `nrc_photo_back_uploaded_at`
+  - `info_updated_at`, `info_updated_by`
+  - `nrc`, `father_name`, `dob`, `address`, `note`
+- `events.functions.ts`:
+  - `listEventRegistrations` selects `blood_type`, both photo paths (used only to show yes/no) and `info_updated_at`.
+  - New `getNrcPhotoSignedUrl({ id, side: 'front' | 'back' })`. It reads the right path column for that row through the user session, then signs it for 60s from the private bucket `event-nrc-photos`. It never takes a path from the browser.
+  - New `updateRegistrationInfo({ id, ...fields })`:
+    - Zod-validated.
+    - Loads the row's event through the user session and checks the division against `events.divisions`.
+    - Refuses if the row's status is `cancelled`.
+    - The update patch has exactly the ten allowed columns; status, reference_no, event_id, proof path and photo paths are never sent.
+    - Returns the updated row; the database records who changed it and when.
+  - Both use `requireStaffOrOrganizer`, so row-level security limits organizers to their own event.
+- New `src/components/mcf/events/EditRegistrationDialog.tsx`; `RegistrationTable.tsx` gets the column, buttons, export fields and dialog. Raw path and new columns are removed from the generic "extra fields" list in the detail drawer.
+- /work, /work/$reg and /print/$reg are not touched.
