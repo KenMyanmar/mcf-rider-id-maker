@@ -6,12 +6,14 @@ import {
   listEventRegistrations,
   getEventRegistration,
   getProofSignedUrl,
+  getNrcPhotoSignedUrl,
   updateRegistrationStatus,
 } from "@/lib/events.functions";
 import type { EventRow, EventRegistrationRow, EventDivision } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
+import { EditRegistrationDialog } from "./EditRegistrationDialog";
 import { Download, Search, Eye, X } from "lucide-react";
 
 function divisionLabel(event: EventRow | null, id: string | null): string {
@@ -20,10 +22,16 @@ function divisionLabel(event: EventRow | null, id: string | null): string {
   return d ? (d.label_mm ?? d.label) : id;
 }
 
+function bloodLabel(v: string | null | undefined): string {
+  if (!v) return "—";
+  return v === "unknown" ? "Don't know" : v;
+}
+
 export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: boolean }) {
   const fetchList = useServerFn(listEventRegistrations);
   const fetchOne = useServerFn(getEventRegistration);
   const fetchProof = useServerFn(getProofSignedUrl);
+  const fetchNrc = useServerFn(getNrcPhotoSignedUrl);
   const saveStatus = useServerFn(updateRegistrationStatus);
 
   const [event, setEvent] = useState<EventRow | null>(null);
@@ -40,6 +48,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const [newStatus, setNewStatus] = useState("registered");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -82,6 +91,16 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
     }
   }
 
+  async function viewNrc(side: "front" | "back") {
+    if (!detail) return;
+    try {
+      const { url } = (await fetchNrc({ data: { id: detail.id, side } })) as { url: string };
+      window.open(url, "_blank", "noopener");
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   async function viewProof() {
     if (!detail) return;
     try {
@@ -119,9 +138,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       Phone: r.phone ?? "",
       Division: divisionLabel(event, r.division),
       "Team/Club": r.team_club ?? "",
+      "Blood type": r.blood_type ? bloodLabel(r.blood_type) : "",
       Status: statusLabel(r.status).en,
       "Status (MM)": statusLabel(r.status).mm,
       Proof: r.payment_proof_path ? "yes" : "no",
+      "NRC front": r.nrc_photo_path ? "yes" : "no",
+      "NRC back": r.nrc_photo_back_path ? "yes" : "no",
       "Created at": r.created_at ?? "",
       "Last status change": r.status_updated_at ?? "",
       Note: r.status_note ?? "",
@@ -185,6 +207,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
               <th className="px-3 py-2">Phone</th>
               <th className="px-3 py-2">Division</th>
               <th className="px-3 py-2">Team/Club</th>
+              <th className="px-3 py-2">Blood</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Proof</th>
               <th className="px-3 py-2">Created</th>
@@ -194,13 +217,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
                   No registrations found.
                 </td>
               </tr>
@@ -212,6 +235,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
                   <td className="px-3 py-2">{divisionLabel(event, r.division)}</td>
                   <td className="px-3 py-2">{r.team_club ?? "—"}</td>
+                  <td className="px-3 py-2">{bloodLabel(r.blood_type)}</td>
                   <td className="px-3 py-2">
                     <span
                       className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(r.status)}`}
@@ -260,8 +284,10 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ["Phone", detail.phone],
                       ["Division", divisionLabel(event, detail.division)],
                       ["Team/Club", detail.team_club],
+                      ["Blood type", bloodLabel(detail.blood_type)],
                       ["Created", detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
                       ["Last status change", detail.status_updated_at ? new Date(detail.status_updated_at).toLocaleString() : null],
+                      ["Last edited", detail.info_updated_at ? new Date(detail.info_updated_at).toLocaleString() : null],
                     ] as Array<[string, string | null]>
                   ).map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-3">
@@ -275,10 +301,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                     ([k, v]) =>
                       v != null &&
                       v !== "" &&
+                      !k.endsWith("_path") &&
                       ![
                         "id", "event_id", "reference_no", "full_name", "phone", "division",
                         "team_club", "status", "status_note", "payment_proof_path",
                         "created_at", "status_updated_at", "status_updated_by",
+                        "blood_type", "info_updated_at", "info_updated_by",
                       ].includes(k),
                   )
                   .map(([k, v]) => (
@@ -288,14 +316,45 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                     </div>
                   ))}
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!detail.payment_proof_path}
-                  onClick={() => void viewProof()}
-                >
-                  View proof
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!detail.payment_proof_path}
+                    onClick={() => void viewProof()}
+                  >
+                    View proof
+                  </Button>
+                  {detail.nrc_photo_path ? (
+                    <Button variant="outline" size="sm" onClick={() => void viewNrc("front")}>
+                      View NRC front
+                    </Button>
+                  ) : null}
+                  {detail.nrc_photo_back_path ? (
+                    <Button variant="outline" size="sm" onClick={() => void viewNrc("back")}>
+                      View NRC back
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={detail.status === "cancelled"}
+                    title={detail.status === "cancelled" ? "Cancelled registrations cannot be edited" : undefined}
+                    onClick={() => setEditOpen(true)}
+                  >
+                    Edit rider
+                  </Button>
+                </div>
+                <EditRegistrationDialog
+                  row={detail}
+                  divisions={divisions}
+                  open={editOpen}
+                  onOpenChange={setEditOpen}
+                  onSaved={(u) => {
+                    setDetail({ ...detail, ...u });
+                    setRows((rs) => rs.map((r) => (r.id === u.id ? { ...r, ...u } : r)));
+                  }}
+                />
 
                 <div className="rounded-lg border border-neutral-200 p-3 space-y-2">
                   <div className="text-xs font-semibold text-neutral-700">Update status</div>
