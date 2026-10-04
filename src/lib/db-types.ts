@@ -66,8 +66,10 @@ export type EventRegistrationStatus =
 
 export interface EventDivision {
   id: string;
-  label: string;
-  label_mm?: string | null;
+  en: string;
+  mm: string;
+  age_rule_en?: string | null;
+  age_rule_mm?: string | null;
 }
 
 export interface EventRow {
@@ -77,6 +79,7 @@ export interface EventRow {
   name_mm: string | null;
   date: string | null;
   divisions: EventDivision[] | null;
+  shirt_sizes: string[] | null;
   published: boolean;
 }
 
@@ -106,6 +109,10 @@ export interface EventRegistrationRow {
   dob?: string | null;
   address?: string | null;
   note?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+  shirt_size?: string | null;
+  waiver_accepted_at?: string | null;
 }
 
 export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown"] as const;
