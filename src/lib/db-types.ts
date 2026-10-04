@@ -70,6 +70,8 @@ export interface EventDivision {
   mm: string;
   age_rule_en?: string | null;
   age_rule_mm?: string | null;
+  bib_start?: number | null;
+  bib_end?: number | null;
 }
 
 export interface EventRow {
@@ -80,6 +82,7 @@ export interface EventRow {
   date: string | null;
   divisions: EventDivision[] | null;
   shirt_sizes: string[] | null;
+  max_participants: number | null;
   published: boolean;
 }
 
@@ -92,6 +95,7 @@ export interface EventRegistrationRow {
   division: string | null;
   team_club: string | null;
   status: EventRegistrationStatus;
+  bib_no: number | null;
   status_note: string | null;
   payment_proof_path: string | null;
   created_at: string | null;

@@ -17,7 +17,7 @@ export const listMyEvents = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     let query = context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
       .eq("published", true)
       .order("date", { ascending: false });
 
@@ -67,7 +67,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: ev, error: evErr } = await context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
       .eq("slug", data.slug)
       .eq("published", true)
       .maybeSingle();
@@ -78,43 +78,66 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("event_registrations")
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (data.status) q = q.eq("status", data.status);
+    if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
+    else if (data.status) q = q.eq("status", data.status);
     if (data.division) q = q.eq("division", data.division);
     const search = data.query?.trim();
     if (search) {
       const like = `%${search.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-      q = q.or(
-        [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`].join(","),
-      );
+      const parts = [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`];
+      if (/^\d{1,9}$/.test(search)) parts.push(`bib_no.eq.${Number(search)}`);
+      q = q.or(parts.join(","));
     }
 
     const { data: rows, error } = await q;
     if (error) throw new Error(error.message);
 
-    // Size summary: whole event, all non-cancelled, independent of filters.
+    // Whole-event summary, independent of filters.
+    const { data: allRows, error: allErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, full_name, status, division, bib_no, shirt_size, created_at")
+      .eq("event_id", event.id)
+      .order("created_at", { ascending: true });
+    if (allErr) throw new Error(allErr.message);
+    type Lite = {
+      id: string;
+      full_name: string | null;
+      status: string;
+      division: string | null;
+      bib_no: number | null;
+      shirt_size: string | null;
+    };
+    const all = (allRows ?? []) as unknown as Lite[];
+
     const sizeCounts: Record<string, number> = {};
-    if ((event.shirt_sizes ?? []).length > 0) {
-      const { data: sizeRows, error: sizeErr } = await context.supabase
-        .from("event_registrations")
-        .select("shirt_size, status")
-        .eq("event_id", event.id)
-        .neq("status", "cancelled");
-      if (sizeErr) throw new Error(sizeErr.message);
-      for (const r of (sizeRows ?? []) as Array<{ shirt_size: string | null }>) {
-        if (r.shirt_size) sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
+    const bibsByDivision: Record<string, number> = {};
+    let paidConfirmed = 0;
+    let registered = 0;
+    const pendingBib: Array<{ id: string; full_name: string | null }> = [];
+    for (const r of all) {
+      if (r.status !== "cancelled" && r.shirt_size) {
+        sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
       }
+      if (r.status === "paid" || r.status === "confirmed") paidConfirmed++;
+      if (r.status === "registered") registered++;
+      if (r.bib_no != null && r.division && r.status !== "cancelled") {
+        bibsByDivision[r.division] = (bibsByDivision[r.division] ?? 0) + 1;
+      }
+      if (r.status === "paid" && r.bib_no == null) pendingBib.push({ id: r.id, full_name: r.full_name });
     }
 
     return {
       event,
       registrations: (rows ?? []) as unknown as EventRegistrationRow[],
       sizeCounts,
+      capacity: { paidConfirmed, registered, bibsByDivision },
+      pendingBib,
     };
   });
 
@@ -311,7 +334,7 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
       .update(patch)
       .eq("id", data.id)
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, created_at, status_updated_at",
       )
       .single();
     if (error) throw new Error(error.message);
@@ -420,4 +443,45 @@ export const toggleOrganizerActive = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
     return row as unknown as EventOrganizerRow;
+  });
+
+const UpdateBibInput = z.object({
+  id: z.string().min(1),
+  bib_no: z.number().int().positive().max(999999).nullable(),
+});
+
+export const updateRegistrationBib = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: z.input<typeof UpdateBibInput>) => UpdateBibInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: cur, error: curErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, status")
+      .eq("id", data.id)
+      .maybeSingle<{ id: string; status: string }>();
+    if (curErr) throw new Error(curErr.message);
+    if (!cur) throw new Error("Registration not found");
+    if (cur.status !== "paid" && cur.status !== "confirmed") {
+      throw new Error("A bib can only be set for Paid or Confirmed riders.");
+    }
+    const patch = { bib_no: data.bib_no };
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      update: (p: typeof patch) => {
+        eq: (c: string, v: string) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+          };
+        };
+      };
+    })
+      .update(patch)
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error) {
+      if (error.code === "23505") throw new Error(`Bib ${data.bib_no} is already in use`);
+      throw new Error(error.message);
+    }
+    return row as unknown as EventRegistrationRow;
   });
