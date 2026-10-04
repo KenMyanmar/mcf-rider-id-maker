@@ -217,13 +217,13 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={10} className="px-3 py-6 text-center text-neutral-400">
                   No registrations found.
                 </td>
               </tr>
