@@ -17,7 +17,7 @@ export const listMyEvents = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     let query = context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
       .eq("published", true)
       .order("date", { ascending: false });
 
@@ -67,7 +67,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: ev, error: evErr } = await context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
       .eq("slug", data.slug)
       .eq("published", true)
       .maybeSingle();
@@ -78,7 +78,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("event_registrations")
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
@@ -311,7 +311,7 @@ export const updateRegistrationStatus = createServerFn({ method: "POST" })
       .update(patch)
       .eq("id", data.id)
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, status_note, payment_proof_path, created_at, status_updated_at",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, created_at, status_updated_at",
       )
       .single();
     if (error) throw new Error(error.message);
