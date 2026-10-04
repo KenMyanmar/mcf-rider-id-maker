@@ -94,7 +94,21 @@ export interface EventRegistrationRow {
   created_at: string | null;
   status_updated_by: string | null;
   status_updated_at: string | null;
+  blood_type?: string | null;
+  nrc_photo_path?: string | null;
+  nrc_photo_uploaded_at?: string | null;
+  nrc_photo_back_path?: string | null;
+  nrc_photo_back_uploaded_at?: string | null;
+  info_updated_at?: string | null;
+  info_updated_by?: string | null;
+  nrc?: string | null;
+  father_name?: string | null;
+  dob?: string | null;
+  address?: string | null;
+  note?: string | null;
 }
+
+export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown"] as const;
 
 export interface EventOrganizerRow {
   id: string;
