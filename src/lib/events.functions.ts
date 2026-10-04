@@ -444,3 +444,44 @@ export const toggleOrganizerActive = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return row as unknown as EventOrganizerRow;
   });
+
+const UpdateBibInput = z.object({
+  id: z.string().min(1),
+  bib_no: z.number().int().positive().max(999999).nullable(),
+});
+
+export const updateRegistrationBib = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: z.input<typeof UpdateBibInput>) => UpdateBibInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: cur, error: curErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, status")
+      .eq("id", data.id)
+      .maybeSingle<{ id: string; status: string }>();
+    if (curErr) throw new Error(curErr.message);
+    if (!cur) throw new Error("Registration not found");
+    if (cur.status !== "paid" && cur.status !== "confirmed") {
+      throw new Error("A bib can only be set for Paid or Confirmed riders.");
+    }
+    const patch = { bib_no: data.bib_no };
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      update: (p: typeof patch) => {
+        eq: (c: string, v: string) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+          };
+        };
+      };
+    })
+      .update(patch)
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error) {
+      if (error.code === "23505") throw new Error(`Bib ${data.bib_no} is already in use`);
+      throw new Error(error.message);
+    }
+    return row as unknown as EventRegistrationRow;
+  });
