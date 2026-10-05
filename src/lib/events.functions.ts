@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { checkAgeClass } from "@/lib/age-class";
 import { requireStaffOrOrganizer } from "@/integrations/supabase/auth-middleware";
 import type {
   EventRow,
@@ -78,13 +79,15 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("event_registrations")
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, dob, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
+    if (data.status === "age_mismatch") {
+      /* filtered after the summary query below */
+    } else if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
     else if (data.status === "no_proof") q = q.is("payment_proof_path", null).neq("status", "cancelled");
     else if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
     else if (data.status) q = q.eq("status", data.status);
@@ -103,7 +106,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     // Whole-event summary, independent of filters.
     const { data: allRows, error: allErr } = await context.supabase
       .from("event_registrations")
-      .select("id, full_name, status, division, bib_no, shirt_size, created_at")
+      .select("id, full_name, status, division, bib_no, shirt_size, dob, created_at")
       .eq("event_id", event.id)
       .order("created_at", { ascending: true });
     if (allErr) throw new Error(allErr.message);
@@ -114,6 +117,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
       division: string | null;
       bib_no: number | null;
       shirt_size: string | null;
+      dob: string | null;
     };
     const all = (allRows ?? []) as unknown as Lite[];
 
@@ -121,6 +125,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     const bibsByDivision: Record<string, number> = {};
     let paidConfirmed = 0;
     let registered = 0;
+    const ageMismatchIds: string[] = [];
     const pendingBib: Array<{ id: string; full_name: string | null }> = [];
     for (const r of all) {
       if (r.status !== "cancelled" && r.shirt_size) {
@@ -131,15 +136,19 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
       if (r.bib_no != null && r.division && r.status !== "cancelled") {
         bibsByDivision[r.division] = (bibsByDivision[r.division] ?? 0) + 1;
       }
+      if (r.status !== "cancelled" && checkAgeClass(r.division, r.dob, event.date).mismatch) ageMismatchIds.push(r.id);
       if (r.status === "paid" && r.bib_no == null) pendingBib.push({ id: r.id, full_name: r.full_name });
     }
 
     return {
       event,
-      registrations: (rows ?? []) as unknown as EventRegistrationRow[],
+      registrations: ((rows ?? []) as unknown as EventRegistrationRow[]).filter(
+        (r) => data.status !== "age_mismatch" || ageMismatchIds.includes(r.id),
+      ),
       sizeCounts,
       capacity: { paidConfirmed, registered, bibsByDivision },
       pendingBib,
+      ageMismatchIds,
     };
   });
 
