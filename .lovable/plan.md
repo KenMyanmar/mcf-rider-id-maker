@@ -1,28 +1,55 @@
-# Upload documents on a rider's behalf
+# Date of birth column and age/class mismatch alert
 
-No database changes. Everything runs as the signed-in staff member or organizer; no service-role key.
+The brief is solid. It's a warning, not a block, the rule lives in one place, and it says what happens when the class or DOB is unknown. I've tightened three points so it holds up on race-day data:
+
+- **Count across the whole race.** "Age mismatch: N" counts every non-cancelled rider in the race, whatever search or filter is active. Tapping it shows exactly those riders. The same approach as the bulk bib button.
+- **Exact date maths.** Age is worked out from the plain dates (birth date vs race date), so a phone's time zone can never shift a rider's age by a day.
+- **A test for the age rule.** Small automatic checks pin the boundaries (17/18, 35/36, 45/46, 60/61, birthday exactly on race day), so a later change can't quietly break them.
 
 ## What staff and organizers will see
 
-- In the rider detail, a new block **"Upload for rider / ပြိုင်ပွဲဝင်အတွက် တင်ပေးရန်"** with three rows: Payment proof, NRC front, NRC back.
-  - Each row shows "On file — {date/time}, by rider" or "by {staff name}", or "Not uploaded".
-  - Button reads "Upload", or "Replace" when a file exists (asks to confirm first).
-  - On phones the picker offers the camera, so a paper receipt or ID can be photographed directly.
-  - Payment proof: JPG, PNG, WebP or PDF. NRC: JPG, PNG or WebP. Max 5 MB each; a clear message otherwise.
-  - The whole block is disabled for cancelled riders.
-- After upload the row refreshes: "View proof / View NRC front / View NRC back" work immediately and the table's Proof column updates. Status and bib never change.
-- Status filter gains "Has proof, not yet Paid" and "No proof yet".
-- Excel export gains "Proof uploaded by" (rider / staff).
+- **New DOB column** right after Division, e.g. "1 Sep 2008 · 18" (age on race day). Team/Club moves to the last column, after Created.
+- **Amber highlight** with a warning icon on the Division and DOB cells when the age doesn't fit the class. Hovering shows the reason.
+- **Rider detail** shows the same line, in both languages:
+  "Age 18 on race day. Class chosen: Under 18. Suggested: 18–35."
+  "ပြိုင်ပွဲနေ့တွင် အသက် ၁၈ နှစ်။ ရွေးထားသောအတန်း: … ။ အကြံပြု: … ။"
+  (Class names come from the race's own English/Myanmar labels.)
+- **"Age mismatch: N" chip** above the table. Tap it to show only those riders; tap again to clear. Cancelled riders are never counted.
+- **Warning only.** Status changes and bib issuing work as before. Class changes stay in Edit rider.
+- **Excel export** gains DOB, Age on race day and Age check (OK / mismatch, with the suggested class).
+
+## Rules
+
+```text
+under_18       age < 18
+18_35          18–35
+35_45          36–45
+45_60          46–60
+over_60        age > 60
+open_under_45  age < 45
+women          no check
+unknown class or no DOB / no race date -> no alert
+```
+Suggestion: the one age class (not Open, not Women) whose range contains the rider's age.
 
 ## Technical details
 
-- `db-types.ts`: add `payment_proof_uploaded_at/by`, `nrc_photo_uploaded_by`, `nrc_photo_back_uploaded_by` (the two NRC `_at` fields already exist).
-- `events.functions.ts`:
-  - New `uploadRegistrationDocument` (POST, `requireStaffOrOrganizer`). Input is `FormData` with `id`, `kind` (`payment_proof | nrc_front | nrc_back`), `file`; validator checks kind, MIME type per kind and size <= 5 MB.
-  - Loads `id, event_id, status` through the user session (RLS scopes organizers); refuses cancelled.
-  - Uploads with `context.supabase.storage` and `upsert: false` to `event-payment-proofs` or `event-nrc-photos` at `{event_id}/{id}/staff-{ts}.{ext}`, `nrc-front-staff-{ts}`, `nrc-back-staff-{ts}`.
-  - Updates only the one matching path column; on failure reports the error and leaves the object. Returns the refreshed row via `select("*")`.
-  - List select adds `payment_proof_uploaded_by`; filter values `proof_not_paid` (`payment_proof_path not null` and status `registered`) and `no_proof` (`payment_proof_path is null`, not cancelled).
-  - "by" name: for uploaded_by ids, look up `display_name` in `mcf_card_staff` and `event_organizers` via the session; fall back to "staff" if not readable. Null uploaded_by with a path = "by rider".
-- `RegistrationTable.tsx`: new upload block (hidden file inputs, `accept="image/*"` + `capture="environment"` for NRC, `accept="image/*,application/pdf"` for proof without capture so PDF stays choosable), browser-side type/size checks, confirm on Replace, merge returned row and reload list. Filter options and export column.
-- Card Desk files (/work, /work/$reg, /print/$reg) untouched. Typecheck after; signed-in upload check left for the user unless a session is available.
+- New `src/lib/age-class.ts` (shared by browser and server):
+  - `ageOnDate(dob, eventDate)`: completed years from `YYYY-MM-DD` strings, no time zone involved.
+  - `AGE_RULES` table plus `checkAgeClass(divisionId, dob, eventDate)`, returning `{ age, mismatch, suggestedId }`. This is the only place the rule lives.
+- Tests in `src/lib/age-class.test.ts` (vitest): one test per boundary above, plus Women / unknown class / missing DOB returning no alert.
+- `events.functions.ts` (`listEventRegistrations`):
+  - add `dob` to the list select and the whole-event summary query
+  - compute `ageMismatchIds` (non-cancelled) and return it
+  - new filter value `age_mismatch` limits the list to those ids
+- `RegistrationTable.tsx`:
+  - DOB column after Division; Team/Club moved last
+  - amber cells with an icon and a `title` tooltip
+  - chip that toggles the `age_mismatch` filter
+  - mismatch line in the detail panel
+  - new Excel columns
+- No database changes, no test registrations, Card Desk files untouched.
+
+## Reporting the count
+
+I can't sign in to read the live registrations from here, so I can't confirm the count of 11 myself. After the build I'll run the tests and typecheck. Then on sayagyi.org, open kbz-mtb-2026 and check that the chip reads "Age mismatch: 11". If it doesn't, send me the number and a screenshot of the list it filters to.
