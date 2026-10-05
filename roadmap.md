@@ -3,3 +3,4 @@
 - [x] Division label fix, emergency contact, shirt size, size summary, detail cleanup
 - [x] Confirm build passes + /work, /work/$reg, /print/$reg unchanged
 - [x] Bib issuance + capacity panel (bulk issue uses whole-event Paid/no-bib list from server)
+- [ ] Staff/organizer document uploads (no capture attribute; camera + library)
