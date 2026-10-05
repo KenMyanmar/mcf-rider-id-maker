@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
 import { EditRegistrationDialog } from "./EditRegistrationDialog";
-import { Download, Search, Eye, X } from "lucide-react";
+import { Download, Search, Eye, X, AlertTriangle } from "lucide-react";
+import { checkAgeClass } from "@/lib/age-class";
 
 function findDivision(event: EventRow | null, id: string | null): EventDivision | undefined {
   if (!id) return undefined;
@@ -56,6 +57,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const uploadDoc = useServerFn(uploadRegistrationDocument);
   const [uploading, setUploading] = useState<string | null>(null);
   const [capacity, setCapacity] = useState<Capacity>({ paidConfirmed: 0, registered: 0, bibsByDivision: {} });
+  const [ageMismatchIds, setAgeMismatchIds] = useState<string[]>([]);
   const [pendingBib, setPendingBib] = useState<Array<{ id: string; full_name: string | null }>>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkReport, setBulkReport] = useState<{ ok: number; failed: Array<{ name: string; reason: string }> } | null>(null);
@@ -96,7 +98,9 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           sizeCounts: Record<string, number>;
           capacity: Capacity;
           pendingBib: Array<{ id: string; full_name: string | null }>;
+          ageMismatchIds: string[];
         };
+        setAgeMismatchIds(res.ageMismatchIds ?? []);
         setCapacity(res.capacity);
         setPendingBib(res.pendingBib ?? []);
         setEvent(res.event);
@@ -286,7 +290,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       Phone: r.phone ?? "",
       Division: divisionEn(event, r.division),
       "Division (MM)": divisionMm(event, r.division),
-      "Team/Club": r.team_club ?? "",
+
       "Blood type": r.blood_type ? bloodLabel(r.blood_type) : "",
       "Shirt size": r.shirt_size ?? "",
       "Emergency contact name": r.emergency_contact_name ?? "",
@@ -300,6 +304,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       "Created at": r.created_at ?? "",
       "Last status change": r.status_updated_at ?? "",
       Note: r.status_note ?? "",
+      DOB: r.dob ?? "",
+      "Age on race day": ageCheck(event, r).age ?? "",
+      "Age check": ageCheck(event, r).mismatch
+        ? `mismatch — suggested ${divisionEn(event, ageCheck(event, r).suggestedId) || "none"}`
+        : r.dob ? "OK" : "",
+      "Team/Club": r.team_club ?? "",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
@@ -328,6 +338,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <option value="paid_no_bib">Paid, no bib</option>
           <option value="proof_not_paid">Has proof, not yet Paid</option>
           <option value="no_proof">No proof yet</option>
+          <option value="age_mismatch">Age mismatch</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s).mm} ({statusLabel(s).en})
@@ -362,6 +373,22 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       ) : null}
 
       <CapacityPanel event={event} capacity={capacity} />
+
+      {ageMismatchIds.length > 0 || status === "age_mismatch" ? (
+        <button
+          type="button"
+          onClick={() => setStatus((v) => (v === "age_mismatch" ? "" : "age_mismatch"))}
+          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
+            status === "age_mismatch"
+              ? "border-amber-500 bg-amber-500 text-white"
+              : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+          }`}
+        >
+          <AlertTriangle className="h-3.5 w-3.5" />
+          Age mismatch / အသက်နှင့်အတန်း မကိုက်: {ageMismatchIds.length}
+          {status === "age_mismatch" ? " ✕" : ""}
+        </button>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" disabled={bulkRunning || pendingBib.length === 0} onClick={() => void issueAll()}>
@@ -401,25 +428,26 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
               <th className="px-3 py-2">Name</th>
               <th className="px-3 py-2">Phone</th>
               <th className="px-3 py-2">Division</th>
-              <th className="px-3 py-2">Team/Club</th>
+              <th className="px-3 py-2">DOB</th>
               <th className="px-3 py-2">Blood</th>
               <th className="px-3 py-2">Size</th>
               <th className="px-3 py-2">Status</th>
               <th className="px-3 py-2">Proof</th>
               <th className="px-3 py-2">Created</th>
+              <th className="px-3 py-2">Team/Club</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={13} className="px-3 py-6 text-center text-neutral-400">
                   Loading…
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-3 py-6 text-center text-neutral-400">
+                <td colSpan={13} className="px-3 py-6 text-center text-neutral-400">
                   No registrations found.
                 </td>
               </tr>
@@ -430,10 +458,29 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   <td className="px-3 py-2 font-mono text-xs">{r.reference_no ?? "—"}</td>
                   <td className="px-3 py-2 font-medium">{r.full_name ?? "—"}</td>
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
-                  <td className="px-3 py-2" title={divisionEn(event, r.division)}>
-                    {divisionLabel(event, r.division)}
-                  </td>
-                  <td className="px-3 py-2">{r.team_club ?? "—"}</td>
+                  {(() => {
+                    const chk = ageCheck(event, r);
+                    const warn = chk.mismatch;
+                    const tip = warn ? mismatchText(event, r).en : divisionEn(event, r.division);
+                    const cls = warn ? "bg-amber-50 text-amber-900 cursor-pointer" : "";
+                    const open = warn ? () => void openDetail(r.id) : undefined;
+                    return (
+                      <>
+                        <td className={`px-3 py-2 ${cls}`} title={tip} onClick={open}>
+                          <span className="inline-flex items-center gap-1">
+                            {warn ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}
+                            {divisionLabel(event, r.division)}
+                          </span>
+                        </td>
+                        <td className={`px-3 py-2 whitespace-nowrap ${cls}`} title={warn ? tip : undefined} onClick={open}>
+                          <span className="inline-flex items-center gap-1">
+                            {warn ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}
+                            {r.dob ? `${formatDob(r.dob)}${chk.age != null ? ` · ${chk.age}` : ""}` : "—"}
+                          </span>
+                        </td>
+                      </>
+                    );
+                  })()}
                   <td className="px-3 py-2">{bloodLabel(r.blood_type)}</td>
                   <td className="px-3 py-2">{r.shirt_size ?? "—"}</td>
                   <td className="px-3 py-2">
@@ -448,6 +495,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                   <td className="px-3 py-2 text-xs text-neutral-500">
                     {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
                   </td>
+                  <td className="px-3 py-2">{r.team_club ?? "—"}</td>
                   <td className="px-3 py-2">
                     <Button size="sm" variant="ghost" onClick={() => void openDetail(r.id)}>
                       <Eye className="h-3.5 w-3.5" />
@@ -476,6 +524,16 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
               <p className="mt-4 text-sm text-neutral-500">Loading…</p>
             ) : (
               <div className="mt-4 space-y-4">
+                {ageCheck(event, detail).mismatch ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-1">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                      {mismatchText(event, detail).en}
+                    </div>
+                    <div>{mismatchText(event, detail).mm}</div>
+                    <div className="text-xs text-amber-800">Warning only — check the NRC photo, then change the class in Edit rider if needed.</div>
+                  </div>
+                ) : null}
                 <dl className="space-y-1.5 text-sm">
                   {(
                     [
@@ -495,7 +553,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ) : null],
                       ["NRC number", detail.nrc ?? null],
                       ["Father's name", detail.father_name ?? null],
-                      ["Date of birth", detail.dob ?? null],
+                      ["Date of birth", detail.dob ? `${formatDob(detail.dob)}${ageCheck(event, detail).age != null ? ` · age ${ageCheck(event, detail).age} on race day` : ""}` : null],
                       ["Address", detail.address ?? null],
                       ["Note", detail.note ?? null],
                       ["Waiver accepted", detail.waiver_accepted_at ? new Date(detail.waiver_accepted_at).toLocaleString() : null],
@@ -758,4 +816,30 @@ function UploadRow({
       </Button>
     </div>
   );
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function formatDob(d: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : d;
+}
+
+function ageCheck(event: EventRow | null, r: { division: string | null; dob?: string | null }) {
+  return checkAgeClass(r.division, r.dob ?? null, event?.date ?? null);
+}
+
+const MM_DIGITS = "၀၁၂၃၄၅၆၇၈၉";
+const toMm = (n: number) => String(n).replace(/\d/g, (c) => MM_DIGITS[Number(c)]);
+
+function mismatchText(event: EventRow | null, r: { division: string | null; dob?: string | null }) {
+  const c = ageCheck(event, r);
+  const age = c.age ?? 0;
+  const chosenEn = divisionEn(event, r.division);
+  const chosenMm = divisionMm(event, r.division);
+  const sugEn = c.suggestedId ? divisionEn(event, c.suggestedId) : "—";
+  const sugMm = c.suggestedId ? divisionMm(event, c.suggestedId) : "—";
+  return {
+    en: `Age ${age} on race day. Class chosen: ${chosenEn}. Suggested: ${sugEn}.`,
+    mm: `ပြိုင်ပွဲနေ့တွင် အသက် ${toMm(age)} နှစ်။ ရွေးထားသောအတန်း: ${chosenMm}။ အကြံပြု: ${sugMm}။`,
+  };
 }
