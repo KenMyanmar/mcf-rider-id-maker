@@ -104,6 +104,11 @@ export interface EventRegistrationRow {
   blood_type?: string | null;
   nrc_photo_path?: string | null;
   nrc_photo_uploaded_at?: string | null;
+  nrc_photo_uploaded_by?: string | null;
+  nrc_photo_back_uploaded_by?: string | null;
+  payment_proof_uploaded_at?: string | null;
+  payment_proof_uploaded_by?: string | null;
+  uploader_names?: Record<string, string>;
   nrc_photo_back_path?: string | null;
   nrc_photo_back_uploaded_at?: string | null;
   info_updated_at?: string | null;

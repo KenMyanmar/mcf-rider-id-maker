@@ -9,6 +9,7 @@ import {
   getNrcPhotoSignedUrl,
   updateRegistrationStatus,
   updateRegistrationBib,
+  uploadRegistrationDocument,
 } from "@/lib/events.functions";
 import type { EventRow, EventRegistrationRow, EventDivision } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const fetchNrc = useServerFn(getNrcPhotoSignedUrl);
   const saveStatus = useServerFn(updateRegistrationStatus);
   const saveBib = useServerFn(updateRegistrationBib);
+  const uploadDoc = useServerFn(uploadRegistrationDocument);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [capacity, setCapacity] = useState<Capacity>({ paidConfirmed: 0, registered: 0, bibsByDivision: {} });
   const [pendingBib, setPendingBib] = useState<Array<{ id: string; full_name: string | null }>>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -210,6 +213,34 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
     }
   }
 
+  async function handleUpload(kind: DocKind, file: File) {
+    if (!detail) return;
+    const spec = DOC_SPECS[kind];
+    if (!spec.types.includes(file.type)) {
+      toast.error(spec.typeError);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File is larger than 5 MB");
+      return;
+    }
+    setUploading(kind);
+    try {
+      const fd = new FormData();
+      fd.append("id", detail.id);
+      fd.append("kind", kind);
+      fd.append("file", file);
+      const updated = (await uploadDoc({ data: fd })) as EventRegistrationRow;
+      mergeRow(updated);
+      toast.success(`${spec.label} uploaded — ${updated.full_name ?? ""}`);
+      load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(null);
+    }
+  }
+
   async function issueAll() {
     const list = pendingBib;
     if (list.length === 0) return;
@@ -263,6 +294,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       Status: statusLabel(r.status).en,
       "Status (MM)": statusLabel(r.status).mm,
       Proof: r.payment_proof_path ? "yes" : "no",
+      "Proof uploaded by": r.payment_proof_path ? (r.payment_proof_uploaded_by ? "staff" : "rider") : "",
       "NRC front": r.nrc_photo_path ? "yes" : "no",
       "NRC back": r.nrc_photo_back_path ? "yes" : "no",
       "Created at": r.created_at ?? "",
@@ -294,6 +326,8 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         >
           <option value="">All statuses</option>
           <option value="paid_no_bib">Paid, no bib</option>
+          <option value="proof_not_paid">Has proof, not yet Paid</option>
+          <option value="no_proof">No proof yet</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s).mm} ({statusLabel(s).en})
@@ -538,6 +572,25 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                     Edit rider
                   </Button>
                 </div>
+                <div className="rounded-lg border border-neutral-200 p-3 space-y-2">
+                  <div className="text-xs font-semibold text-neutral-700">
+                    Upload for rider / ပြိုင်ပွဲဝင်အတွက် တင်ပေးရန်
+                  </div>
+                  {(["payment_proof", "nrc_front", "nrc_back"] as DocKind[]).map((k) => (
+                    <UploadRow
+                      key={k}
+                      kind={k}
+                      row={detail}
+                      busy={uploading === k}
+                      disabled={detail.status === "cancelled" || uploading !== null}
+                      onFile={(f) => void handleUpload(k, f)}
+                    />
+                  ))}
+                  {detail.status === "cancelled" ? (
+                    <p className="text-xs text-neutral-500">Cancelled registrations cannot receive uploads.</p>
+                  ) : null}
+                </div>
+
                 <EditRegistrationDialog
                   row={detail}
                   divisions={divisions}
@@ -636,6 +689,73 @@ function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: 
           </div>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+type DocKind = "payment_proof" | "nrc_front" | "nrc_back";
+const IMG = ["image/jpeg", "image/png", "image/webp"];
+const DOC_SPECS: Record<DocKind, { label: string; accept: string; types: string[]; typeError: string }> = {
+  payment_proof: {
+    label: "Payment proof",
+    accept: "image/*,application/pdf",
+    types: [...IMG, "application/pdf"],
+    typeError: "Use a JPG, PNG, WebP or PDF file",
+  },
+  nrc_front: { label: "NRC front", accept: "image/*", types: IMG, typeError: "Use a JPG, PNG or WebP photo" },
+  nrc_back: { label: "NRC back", accept: "image/*", types: IMG, typeError: "Use a JPG, PNG or WebP photo" },
+};
+
+function UploadRow({
+  kind,
+  row,
+  busy,
+  disabled,
+  onFile,
+}: {
+  kind: DocKind;
+  row: EventRegistrationRow;
+  busy: boolean;
+  disabled: boolean;
+  onFile: (f: File) => void;
+}) {
+  const spec = DOC_SPECS[kind];
+  const path = kind === "payment_proof" ? row.payment_proof_path : kind === "nrc_front" ? row.nrc_photo_path : row.nrc_photo_back_path;
+  const at = kind === "payment_proof" ? row.payment_proof_uploaded_at : kind === "nrc_front" ? row.nrc_photo_uploaded_at : row.nrc_photo_back_uploaded_at;
+  const by = kind === "payment_proof" ? row.payment_proof_uploaded_by : kind === "nrc_front" ? row.nrc_photo_uploaded_by : row.nrc_photo_back_uploaded_by;
+  const who = by ? (row.uploader_names?.[by] ?? "staff") : "rider";
+  const inputId = `upload-${kind}`;
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <div className="font-medium">{spec.label}</div>
+        <div className="text-xs text-neutral-500">
+          {path ? `On file${at ? ` — ${new Date(at).toLocaleString()}` : ""}, by ${who}` : "Not uploaded"}
+        </div>
+      </div>
+      <input
+        id={inputId}
+        type="file"
+        accept={spec.accept}
+        className="hidden"
+        disabled={disabled}
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onFile(f);
+        }}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled}
+        onClick={() => {
+          if (path && !window.confirm(`Replace the ${spec.label.toLowerCase()} already on file?`)) return;
+          document.getElementById(inputId)?.click();
+        }}
+      >
+        {busy ? "Uploading…" : path ? "Replace" : "Upload"}
+      </Button>
     </div>
   );
 }
