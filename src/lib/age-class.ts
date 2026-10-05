@@ -21,13 +21,16 @@ function parts(d: string | null | undefined): [number, number, number] | null {
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
 }
 
-/** Completed years on the event date. */
+/** Completed years on the event date, plus 1 for every rider whose birthday
+ *  is not race day itself (a rider is always some days past their last
+ *  birthday unless the birthday is race day). */
 export function ageOnDate(dob: string | null | undefined, eventDate: string | null | undefined): number | null {
   const b = parts(dob);
   const e = parts(eventDate);
   if (!b || !e) return null;
   let age = e[0] - b[0];
   if (e[1] < b[1] || (e[1] === b[1] && e[2] < b[2])) age--;
+  if (e[1] !== b[1] || e[2] !== b[2]) age++;
   return age;
 }
 
