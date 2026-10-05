@@ -78,13 +78,15 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     let q = context.supabase
       .from("event_registrations")
       .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
+        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
       )
       .eq("event_id", event.id)
       .order("created_at", { ascending: false })
       .limit(500);
 
-    if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
+    if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
+    else if (data.status === "no_proof") q = q.is("payment_proof_path", null).neq("status", "cancelled");
+    else if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
     else if (data.status) q = q.eq("status", data.status);
     if (data.division) q = q.eq("division", data.division);
     const search = data.query?.trim();
@@ -152,8 +154,37 @@ export const getEventRegistration = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) throw new Error("Registration not found");
-    return row as unknown as EventRegistrationRow;
+    const reg = row as unknown as EventRegistrationRow;
+    reg.uploader_names = await lookupUploaderNames(context.supabase, reg);
+    return reg;
   });
+
+// Resolve uploader user ids to display names via the user's session.
+// Falls back silently when RLS hides the row (UI shows "staff").
+async function lookupUploaderNames(
+  sb: { from: (t: string) => unknown },
+  reg: EventRegistrationRow,
+): Promise<Record<string, string>> {
+  const ids = [reg.payment_proof_uploaded_by, reg.nrc_photo_uploaded_by, reg.nrc_photo_back_uploaded_by].filter(
+    (v): v is string => !!v,
+  );
+  const out: Record<string, string> = {};
+  if (ids.length === 0) return out;
+  type Q = { select: (c: string) => { in: (c: string, v: string[]) => Promise<{ data: unknown }> } };
+  try {
+    const staff = await (sb.from("mcf_card_staff") as Q).select("user_id, display_name, email").in("user_id", ids);
+    for (const r of (staff.data ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>) {
+      out[r.user_id] = r.display_name || r.email || "staff";
+    }
+    const orgs = await (sb.from("event_organizers") as Q).select("user_id, display_name, email").in("user_id", ids);
+    for (const r of (orgs.data ?? []) as Array<{ user_id: string; display_name: string | null; email: string | null }>) {
+      if (!out[r.user_id]) out[r.user_id] = r.display_name || r.email || "organizer";
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
 
 export const getProofSignedUrl = createServerFn({ method: "POST" })
   .middleware([requireStaffOrOrganizer])
@@ -484,4 +515,77 @@ export const updateRegistrationBib = createServerFn({ method: "POST" })
       throw new Error(error.message);
     }
     return row as unknown as EventRegistrationRow;
+  });
+
+const DOC_KINDS = ["payment_proof", "nrc_front", "nrc_back"] as const;
+type DocKind = (typeof DOC_KINDS)[number];
+const MAX_DOC_BYTES = 5 * 1024 * 1024;
+const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const PROOF_TYPES: Record<string, string> = { ...IMAGE_TYPES, "application/pdf": "pdf" };
+
+export const uploadRegistrationDocument = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: FormData) => {
+    if (!(input instanceof FormData)) throw new Error("Expected form data");
+    const id = String(input.get("id") ?? "");
+    const kind = String(input.get("kind") ?? "") as DocKind;
+    const file = input.get("file");
+    if (!id) throw new Error("Missing registration id");
+    if (!DOC_KINDS.includes(kind)) throw new Error("Unknown document type");
+    if (!(file instanceof File)) throw new Error("No file attached");
+    const allowed = kind === "payment_proof" ? PROOF_TYPES : IMAGE_TYPES;
+    if (!allowed[file.type]) {
+      throw new Error(kind === "payment_proof" ? "Use a JPG, PNG, WebP or PDF file" : "Use a JPG, PNG or WebP photo");
+    }
+    if (file.size > MAX_DOC_BYTES) throw new Error("File is larger than 5 MB");
+    return { id, kind, file };
+  })
+  .handler(async ({ data, context }) => {
+    const { data: cur, error: curErr } = await context.supabase
+      .from("event_registrations")
+      .select("id, event_id, status")
+      .eq("id", data.id)
+      .maybeSingle<{ id: string; event_id: string; status: string }>();
+    if (curErr) throw new Error(curErr.message);
+    if (!cur) throw new Error("Registration not found");
+    if (cur.status === "cancelled") throw new Error("Cancelled registrations cannot receive uploads");
+
+    const allowed = data.kind === "payment_proof" ? PROOF_TYPES : IMAGE_TYPES;
+    const ext = allowed[data.file.type];
+    const ts = Date.now();
+    const bucket = data.kind === "payment_proof" ? "event-payment-proofs" : "event-nrc-photos";
+    const name =
+      data.kind === "payment_proof"
+        ? `staff-${ts}.${ext}`
+        : data.kind === "nrc_front"
+          ? `nrc-front-staff-${ts}.${ext}`
+          : `nrc-back-staff-${ts}.${ext}`;
+    const path = `${cur.event_id}/${cur.id}/${name}`;
+
+    const { error: upErr } = await context.supabase.storage
+      .from(bucket)
+      .upload(path, data.file, { upsert: false, contentType: data.file.type });
+    if (upErr) throw new Error(upErr.message);
+
+    const col =
+      data.kind === "payment_proof" ? "payment_proof_path" : data.kind === "nrc_front" ? "nrc_photo_path" : "nrc_photo_back_path";
+    const patch = { [col]: path } as Record<string, string>;
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      update: (p: Record<string, string>) => {
+        eq: (c: string, v: string) => {
+          select: (cols: string) => {
+            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    })
+      .update(patch)
+      .eq("id", cur.id)
+      .select("*")
+      .single();
+    if (error) throw new Error(`File uploaded but the record could not be updated: ${error.message}`);
+    const reg = row as unknown as EventRegistrationRow;
+    reg.uploader_names = await lookupUploaderNames(context.supabase, reg);
+    return reg;
   });
