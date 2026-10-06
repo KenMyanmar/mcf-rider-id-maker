@@ -52,20 +52,20 @@ describe("checkAgeClass", () => {
     expect(checkAgeClass("35_45", "1991-11-15", RACE).suggestedId).toBe("18_35");
   });
   it("34/35 boundary without the exception", () => {
-    expect(checkAgeClass("18_35", "1992-11-14", RACE).mismatch).toBe(false); // 34
-    expect(checkAgeClass("18_35", "1991-11-16", RACE).suggestedId).toBe("35_45"); // 35
-    expect(checkAgeClass("35_45", "1991-11-16", RACE).mismatch).toBe(false); // 35
+    expect(checkAgeClass("18_35", "1992-11-15", RACE).mismatch).toBe(false); // 34
+    expect(checkAgeClass("18_35", "1991-11-14", RACE).suggestedId).toBe("35_45"); // 35
+    expect(checkAgeClass("35_45", "1991-11-14", RACE).mismatch).toBe(false); // 35
   });
   it("44/45 and 59/60 boundaries without the exception", () => {
-    expect(checkAgeClass("35_45", "1982-11-16", RACE).mismatch).toBe(false); // 44
-    expect(checkAgeClass("35_45", "1981-11-16", RACE).suggestedId).toBe("45_60"); // 45
-    expect(checkAgeClass("45_60", "1967-11-16", RACE).mismatch).toBe(false); // 59
-    expect(checkAgeClass("45_60", "1966-11-16", RACE).suggestedId).toBe("over_60"); // 60
-    expect(checkAgeClass("over_60", "1966-11-16", RACE).mismatch).toBe(false); // 60
+    expect(checkAgeClass("35_45", "1982-11-15", RACE).mismatch).toBe(false); // 44
+    expect(checkAgeClass("35_45", "1981-11-14", RACE).suggestedId).toBe("45_60"); // 45
+    expect(checkAgeClass("45_60", "1967-11-15", RACE).mismatch).toBe(false); // 59
+    expect(checkAgeClass("45_60", "1966-11-14", RACE).suggestedId).toBe("over_60"); // 60
+    expect(checkAgeClass("over_60", "1966-11-14", RACE).mismatch).toBe(false); // 60
   });
   it("open_under_45: 44 ok, 45 mismatch", () => {
-    expect(checkAgeClass("open_under_45", "1982-11-16", RACE).mismatch).toBe(false); // 44
-    const r = checkAgeClass("open_under_45", "1981-11-16", RACE); // 45
+    expect(checkAgeClass("open_under_45", "1982-11-15", RACE).mismatch).toBe(false); // 44
+    const r = checkAgeClass("open_under_45", "1981-11-14", RACE); // 45
     expect(r.mismatch).toBe(true);
     expect(r.suggestedId).toBe("45_60");
   });
