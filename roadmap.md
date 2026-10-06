@@ -7,3 +7,5 @@
 - [x] DOB column + age/class mismatch alert (amber cells tappable to open detail)
 - [x] Correct age rule: completed years + 1 unless birthday is race day; update tests; chip should read 7
 - [x] Age rule v3: completed years, shifted ranges (18–34/35–44/45–59/≥60), explicit race-day exception for turning 35/45/60, "Xy Ym" display; chip should read 3 (user to verify after publish)
+- [x] Excel export: Address after Phone (wide column), exportAll paged fetch (1000/page) covering all filtered rows, toast with total count
+- [x] Removed silent 500-row cap on the on-screen list (paged main query)

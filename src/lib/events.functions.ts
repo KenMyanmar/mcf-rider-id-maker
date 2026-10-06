@@ -60,7 +60,12 @@ const ListRegsInput = z.object({
   query: z.string().max(80).optional(),
   status: z.string().optional(),
   division: z.string().optional(),
+  exportAll: z.boolean().optional(),
 });
+
+const REG_COLS =
+  "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, dob, address, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone";
+const PAGE = 1000;
 
 export const listEventRegistrations = createServerFn({ method: "POST" })
   .middleware([requireStaffOrOrganizer])
@@ -76,32 +81,39 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     if (!ev) throw new Error("Event not found");
     const event = ev as unknown as EventRow;
 
-    let q = context.supabase
-      .from("event_registrations")
-      .select(
-        "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, dob, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone",
-      )
-      .eq("event_id", event.id)
-      .order("created_at", { ascending: false })
-      .limit(500);
+    const buildQuery = () => {
+      let q = context.supabase
+        .from("event_registrations")
+        .select(REG_COLS)
+        .eq("event_id", event.id)
+        .order("created_at", { ascending: false });
 
-    if (data.status === "age_mismatch") {
-      /* filtered after the summary query below */
-    } else if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
-    else if (data.status === "no_proof") q = q.is("payment_proof_path", null).neq("status", "cancelled");
-    else if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
-    else if (data.status) q = q.eq("status", data.status);
-    if (data.division) q = q.eq("division", data.division);
-    const search = data.query?.trim();
-    if (search) {
-      const like = `%${search.replace(/[%_]/g, (m) => `\\${m}`)}%`;
-      const parts = [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`];
-      if (/^\d{1,9}$/.test(search)) parts.push(`bib_no.eq.${Number(search)}`);
-      q = q.or(parts.join(","));
+      if (data.status === "age_mismatch") {
+        /* filtered after the summary query below */
+      } else if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
+      else if (data.status === "no_proof") q = q.is("payment_proof_path", null).neq("status", "cancelled");
+      else if (data.status === "paid_no_bib") q = q.eq("status", "paid").is("bib_no", null);
+      else if (data.status) q = q.eq("status", data.status);
+      if (data.division) q = q.eq("division", data.division);
+      const search = data.query?.trim();
+      if (search) {
+        const like = `%${search.replace(/[%_]/g, (m) => `\\${m}`)}%`;
+        const parts = [`full_name.ilike.${like}`, `phone.ilike.${like}`, `reference_no.ilike.${like}`];
+        if (/^\d{1,9}$/.test(search)) parts.push(`bib_no.eq.${Number(search)}`);
+        q = q.or(parts.join(","));
+      }
+      return q;
+    };
+
+    // Page through every matching row so no server row limit can cut the
+    // list (or the export) short.
+    const rows: unknown[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: pageRows, error } = await buildQuery().range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      rows.push(...(pageRows ?? []));
+      if (!pageRows || pageRows.length < PAGE) break;
     }
-
-    const { data: rows, error } = await q;
-    if (error) throw new Error(error.message);
 
     // Whole-event summary, independent of filters.
     const { data: allRows, error: allErr } = await context.supabase
