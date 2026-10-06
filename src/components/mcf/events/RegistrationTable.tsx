@@ -329,9 +329,14 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       "Team/Club": r.team_club ?? "",
     }));
     const ws = XLSX.utils.json_to_sheet(data);
+    // Wide Address column so long text stays readable.
+    ws["!cols"] = Object.keys(data[0] ?? { Address: "" }).map((k) =>
+      k === "Address" ? { wch: 45 } : k === "Name" ? { wch: 25 } : { wch: 16 },
+    );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Registrations");
     XLSX.writeFile(wb, `${slug}-registrations.xlsx`);
+    toast.success(`Exported ${src.length} riders`);
   }
 
   return (
