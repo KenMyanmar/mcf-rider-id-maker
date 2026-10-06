@@ -30,7 +30,8 @@ Drop the +1 rule. Age is plain completed years on race day (a birthday exactly o
 - 17 Jan 2009 → 17y 10m, fits under_18
 - 15 Nov 2008 (turns 18 on race day) → 18y 0m, fits 18_35; mismatch in under_18
 - 16 Nov 2008 → 17y 11m, fits under_18
-- 15 Nov 1981 (turns 45 on race day) → 45y 0m, fits 35_45? No — 45 fits 45_60; boundary pins: 34/35 for 18_35→35_45, 44/45 for 35_45→45_60, 59/60 for 45_60→over_60, 44/45 for open_under_45
+- 15 Nov 1981 (turns 45 on race day) → 45y 0m, fits 45_60; mismatch in 35_45
+- boundary pins: 34/35 for 18_35→35_45, 44/45 for 35_45→45_60, 59/60 for 45_60→over_60, 44/45 for open_under_45
 - women / unknown class / missing DOB still return no alert
 
 ## Verification and reporting
