@@ -829,7 +829,7 @@ function ageCheck(event: EventRow | null, r: { division: string | null; dob?: st
 }
 
 const MM_DIGITS = "၀၁၂၃၄၅၆၇၈၉";
-const toMm = (n: number) => String(n).replace(/\d/g, (c) => MM_DIGITS[Number(c)]);
+const toMm = (n: number | string) => String(n).replace(/\d/g, (c) => MM_DIGITS[Number(c)]);
 
 function mismatchText(event: EventRow | null, r: { division: string | null; dob?: string | null }) {
   const c = ageCheck(event, r);
