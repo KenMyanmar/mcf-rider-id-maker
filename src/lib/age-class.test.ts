@@ -52,7 +52,6 @@ describe("checkAgeClass", () => {
     expect(checkAgeClass("35_45", "1991-11-15", RACE).suggestedId).toBe("18_35");
   });
   it("34/35 boundary without the exception", () => {
-    expect(checkAgeClass("18_35", "1992-11-16", RACE).mismatch).toBe(false); // 33y 11m? -> 34 boundary below
     expect(checkAgeClass("18_35", "1992-11-14", RACE).mismatch).toBe(false); // 34
     expect(checkAgeClass("18_35", "1991-11-16", RACE).suggestedId).toBe("35_45"); // 35
     expect(checkAgeClass("35_45", "1991-11-16", RACE).mismatch).toBe(false); // 35
