@@ -278,16 +278,33 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
     });
   }, [rows, sortBib]);
 
-  function exportExcel() {
-    const anyBib = rows.some((r) => r.bib_no != null);
+  async function exportExcel() {
+    let allRows: EventRegistrationRow[];
+    try {
+      const res = (await fetchList({
+        data: {
+          slug,
+          query: query || undefined,
+          status: status || undefined,
+          division: division || undefined,
+          exportAll: true,
+        },
+      })) as { registrations: EventRegistrationRow[] };
+      allRows = res.registrations;
+    } catch (e) {
+      toast.error((e as Error).message);
+      return;
+    }
+    const anyBib = allRows.some((r) => r.bib_no != null);
     const src = anyBib
-      ? [...rows].sort((a, b) => (a.bib_no ?? Infinity) - (b.bib_no ?? Infinity))
-      : rows;
+      ? [...allRows].sort((a, b) => (a.bib_no ?? Infinity) - (b.bib_no ?? Infinity))
+      : allRows;
     const data = src.map((r) => ({
       Bib: r.bib_no ?? "",
       Reference: r.reference_no ?? "",
       Name: r.full_name ?? "",
       Phone: r.phone ?? "",
+      Address: r.address ?? "",
       Division: divisionEn(event, r.division),
       "Division (MM)": divisionMm(event, r.division),
 
