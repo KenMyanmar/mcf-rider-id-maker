@@ -17,9 +17,9 @@ describe("ageOnDate / ageYearsMonths / formatAge", () => {
     expect(formatAge("1981-11-08", RACE)).toBe("45y 0m");
     expect(formatAge("2009-01-17", RACE)).toBe("17y 10m");
   });
-  it("months roll over correctly", () => {
-    expect(ageYearsMonths("2008-12-20", RACE)).toEqual({ years: 17, months: 10 });
-    expect(ageYearsMonths("2008-11-20", RACE)).toEqual({ years: 17, months: 11 });
+  it("months are the calendar-month difference", () => {
+    expect(ageYearsMonths("2008-12-20", RACE)).toEqual({ years: 17, months: 11 });
+    expect(ageYearsMonths("2008-11-20", RACE)).toEqual({ years: 17, months: 0 });
   });
 });
 

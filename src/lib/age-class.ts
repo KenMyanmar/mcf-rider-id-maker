@@ -32,7 +32,9 @@ export function ageOnDate(dob: string | null | undefined, eventDate: string | nu
   return age;
 }
 
-/** Age as whole years and months on the event date, e.g. { years: 45, months: 0 }. */
+/** Age as years and months on the event date, e.g. { years: 45, months: 0 }.
+ *  Years are completed years (day-adjusted); months are the calendar-month
+ *  difference, so 17 Jan -> 15 Nov reads 10m. */
 export function ageYearsMonths(
   dob: string | null | undefined,
   eventDate: string | null | undefined,
@@ -41,13 +43,9 @@ export function ageYearsMonths(
   const e = parts(eventDate);
   if (!b || !e) return null;
   let years = e[0] - b[0];
-  let months = e[1] - b[1];
-  if (e[2] < b[2]) months--;
-  if (months < 0) {
-    years--;
-    months += 12;
-  }
+  if (e[1] < b[1] || (e[1] === b[1] && e[2] < b[2])) years--;
   if (years < 0) return null;
+  const months = (e[1] - b[1] + 12) % 12;
   return { years, months };
 }
 
