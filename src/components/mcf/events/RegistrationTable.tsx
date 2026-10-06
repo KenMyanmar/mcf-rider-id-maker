@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
 import { EditRegistrationDialog } from "./EditRegistrationDialog";
 import { Download, Search, Eye, X, AlertTriangle } from "lucide-react";
-import { checkAgeClass } from "@/lib/age-class";
+import { checkAgeClass, formatAge } from "@/lib/age-class";
 
 function findDivision(event: EventRow | null, id: string | null): EventDivision | undefined {
   if (!id) return undefined;
@@ -305,7 +305,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       "Last status change": r.status_updated_at ?? "",
       Note: r.status_note ?? "",
       DOB: r.dob ?? "",
-      "Age on race day": ageCheck(event, r).age ?? "",
+      "Age on race day": formatAge(r.dob ?? null, event?.date ?? null) ?? "",
       "Age check": ageCheck(event, r).mismatch
         ? `mismatch — suggested ${divisionEn(event, ageCheck(event, r).suggestedId) || "none"}`
         : r.dob ? "OK" : "",
@@ -475,7 +475,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                         <td className={`px-3 py-2 whitespace-nowrap ${cls}`} title={warn ? tip : undefined} onClick={open}>
                           <span className="inline-flex items-center gap-1">
                             {warn ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" /> : null}
-                            {r.dob ? `${formatDob(r.dob)}${chk.age != null ? ` · ${chk.age}` : ""}` : "—"}
+                            {r.dob ? `${formatDob(r.dob)}${formatAge(r.dob, event?.date ?? null) ? ` · ${formatAge(r.dob, event?.date ?? null)}` : ""}` : "—"}
                           </span>
                         </td>
                       </>
@@ -553,7 +553,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ) : null],
                       ["NRC number", detail.nrc ?? null],
                       ["Father's name", detail.father_name ?? null],
-                      ["Date of birth", detail.dob ? `${formatDob(detail.dob)}${ageCheck(event, detail).age != null ? ` · age ${ageCheck(event, detail).age} on race day` : ""}` : null],
+                      ["Date of birth", detail.dob ? `${formatDob(detail.dob)}${formatAge(detail.dob, event?.date ?? null) ? ` · ${formatAge(detail.dob, event?.date ?? null)} on race day` : ""}` : null],
                       ["Address", detail.address ?? null],
                       ["Note", detail.note ?? null],
                       ["Waiver accepted", detail.waiver_accepted_at ? new Date(detail.waiver_accepted_at).toLocaleString() : null],
@@ -833,7 +833,7 @@ const toMm = (n: number) => String(n).replace(/\d/g, (c) => MM_DIGITS[Number(c)]
 
 function mismatchText(event: EventRow | null, r: { division: string | null; dob?: string | null }) {
   const c = ageCheck(event, r);
-  const age = c.age ?? 0;
+  const age = formatAge(r.dob ?? null, event?.date ?? null) ?? "—";
   const chosenEn = divisionEn(event, r.division);
   const chosenMm = divisionMm(event, r.division);
   const sugEn = c.suggestedId ? divisionEn(event, c.suggestedId) : "—";
