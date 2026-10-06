@@ -6,3 +6,4 @@
 - [x] Staff/organizer document uploads (no capture attribute; camera + library)
 - [x] DOB column + age/class mismatch alert (amber cells tappable to open detail)
 - [x] Correct age rule: completed years + 1 unless birthday is race day; update tests; chip should read 7
+- [ ] Age rule v3: completed years, shifted ranges (18–34/35–44/45–59/≥60), explicit race-day exception for turning 35/45/60, "Xy Ym" display; chip should read 3
