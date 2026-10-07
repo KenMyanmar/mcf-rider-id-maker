@@ -72,6 +72,8 @@ export interface EventDivision {
   age_rule_mm?: string | null;
   bib_start?: number | null;
   bib_end?: number | null;
+  bib_start_2?: number | null;
+  bib_end_2?: number | null;
 }
 
 export interface EventRow {
