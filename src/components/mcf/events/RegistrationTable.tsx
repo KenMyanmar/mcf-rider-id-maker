@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { classBibUsage, classCapacity, formatBibRange } from "@/lib/bib-blocks";
 import { useServerFn } from "@tanstack/react-start";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -722,13 +723,18 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   );
 }
 
-type Capacity = { paidConfirmed: number; registered: number; bibsByDivision: Record<string, number> };
+type Capacity = {
+  paidConfirmed: number;
+  registered: number;
+  bibsByDivision: Record<string, number>;
+  usedBibs?: number[];
+};
 
 function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: Capacity }) {
   if (!event) return null;
   const cap = event.max_participants;
   const pct = cap ? capacity.paidConfirmed / cap : 0;
-  const divs = (event.divisions ?? []).filter((d) => d.bib_start != null && d.bib_end != null);
+  const divs = (event.divisions ?? []).filter((d) => classCapacity(d) > 0);
   return (
     <div className="space-y-2">
       {cap && pct >= 1 ? (
@@ -756,12 +762,10 @@ function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: 
         {divs.length > 0 ? (
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
             {divs.map((d) => {
-              const size = (d.bib_end as number) - (d.bib_start as number) + 1;
-              const used = capacity.bibsByDivision[d.id] ?? 0;
-              const left = size - used;
+              const { capacity: size, used, left } = classBibUsage(d, capacity.usedBibs ?? []);
               return (
                 <span key={d.id} className={left <= 5 ? "text-rose-700 font-medium" : "text-neutral-700"}>
-                  {d.en ?? d.mm ?? d.id}: {used} / {size}
+                  {d.en ?? d.mm ?? d.id} ({formatBibRange(d)}): {used} / {size}
                   {left <= 5 ? ` — only ${Math.max(left, 0)} left` : ""}
                 </span>
               );

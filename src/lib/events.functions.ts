@@ -158,7 +158,12 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
         (r) => data.status !== "age_mismatch" || ageMismatchIds.includes(r.id),
       ),
       sizeCounts,
-      capacity: { paidConfirmed, registered, bibsByDivision },
+      capacity: {
+        paidConfirmed,
+        registered,
+        bibsByDivision,
+        usedBibs: all.map((r) => r.bib_no).filter((b): b is number => b != null),
+      },
       pendingBib,
       ageMismatchIds,
     };
