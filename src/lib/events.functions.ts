@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { checkAgeClass } from "@/lib/age-class";
+import { nrcMatches, phonesMatch, sizeLeft } from "@/lib/shirt-stock";
 import { requireStaffOrOrganizer } from "@/integrations/supabase/auth-middleware";
 import type {
   EventRow,
@@ -18,7 +19,7 @@ export const listMyEvents = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     let query = context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, shirt_stock, max_participants, published")
       .eq("published", true)
       .order("date", { ascending: false });
 
@@ -64,7 +65,7 @@ const ListRegsInput = z.object({
 });
 
 const REG_COLS =
-  "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, dob, address, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone";
+  "id, event_id, reference_no, full_name, phone, division, team_club, status, bib_no, status_note, payment_proof_path, payment_proof_uploaded_by, created_at, status_updated_at, blood_type, dob, address, nrc_photo_path, nrc_photo_back_path, info_updated_at, shirt_size, emergency_contact_name, emergency_contact_phone, entry_source, added_by";
 const PAGE = 1000;
 
 export const listEventRegistrations = createServerFn({ method: "POST" })
