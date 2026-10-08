@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { AlertTriangle, X } from "lucide-react";
 import { addEventRegistration, findEventDuplicates } from "@/lib/events.functions";
-import { BLOOD_TYPES, type EventDivision, type EventRegistrationRow, type EventRow } from "@/lib/db-types";
+import { BLOOD_TYPES, type EventRegistrationRow, type EventRow } from "@/lib/db-types";
 import { checkAgeClass, formatAge } from "@/lib/age-class";
 import { classBibUsage, formatBibRange } from "@/lib/bib-blocks";
 import { sizeLeft } from "@/lib/shirt-stock";
