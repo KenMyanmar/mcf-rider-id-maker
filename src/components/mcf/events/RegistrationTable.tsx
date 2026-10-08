@@ -499,7 +499,17 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                 <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50">
                   <td className="px-3 py-2 font-mono font-semibold">{r.bib_no ?? "—"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.reference_no ?? "—"}</td>
-                  <td className="px-3 py-2 font-medium">{r.full_name ?? "—"}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {r.full_name ?? "—"}
+                    {staffAddedIds.includes(r.id) ? (
+                      <span
+                        title={r.added_by && addedByNames[r.added_by] ? `Added by ${addedByNames[r.added_by]}` : "Added by staff"}
+                        className="ml-1.5 inline-block rounded bg-neutral-100 px-1 align-middle text-[10px] font-medium text-neutral-600"
+                      >
+                        staff
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
                   {(() => {
                     const chk = ageCheck(event, r);
@@ -600,6 +610,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ["Address", detail.address ?? null],
                       ["Note", detail.note ?? null],
                       ["Waiver accepted", detail.waiver_accepted_at ? new Date(detail.waiver_accepted_at).toLocaleString() : null],
+                      ["Added", detail.entry_source === "staff" ? `Staff${detail.added_by && addedByNames[detail.added_by] ? ` — ${addedByNames[detail.added_by]}` : ""}` : null],
                       ["Created", detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
                       ["Last status change", detail.status_updated_at ? new Date(detail.status_updated_at).toLocaleString() : null],
                       ["Last edited", detail.info_updated_at ? new Date(detail.info_updated_at).toLocaleString() : null],
@@ -739,6 +750,20 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           </div>
         </div>
       )}
+      {event ? (
+        <AddRiderDrawer
+          event={event}
+          paidConfirmedBySize={paidConfirmedBySize}
+          usedBibs={capacity.usedBibs ?? []}
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          onAdded={(row) => {
+            load();
+            void openDetail(row.id);
+          }}
+          onOpenExisting={(id) => void openDetail(id)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -790,6 +815,11 @@ function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: 
                 </span>
               );
             })}
+          </div>
+        ) : null}
+        {cap && capacity.paidConfirmed > cap ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+            Paid + Confirmed {capacity.paidConfirmed} — over the cap of {cap} by {capacity.paidConfirmed - cap} / စာရင်းသတ်မှတ်ထားသောအရေအတွက်ထက် ကျော်နေသည်
           </div>
         ) : null}
       </div>
