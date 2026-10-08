@@ -74,7 +74,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: ev, error: evErr } = await context.supabase
       .from("events")
-      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, max_participants, published")
+      .select("id, slug, name_en, name_mm, date, divisions, shirt_sizes, shirt_stock, max_participants, published")
       .eq("slug", data.slug)
       .eq("published", true)
       .maybeSingle();
@@ -89,7 +89,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
         .eq("event_id", event.id)
         .order("created_at", { ascending: false });
 
-      if (data.status === "age_mismatch") {
+      if (data.status === "age_mismatch" || data.status === "staff_added") {
         /* filtered after the summary query below */
       } else if (data.status === "proof_not_paid") q = q.not("payment_proof_path", "is", null).eq("status", "registered");
       else if (data.status === "no_proof") q = q.is("payment_proof_path", null).neq("status", "cancelled");
@@ -119,7 +119,7 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
     // Whole-event summary, independent of filters.
     const { data: allRows, error: allErr } = await context.supabase
       .from("event_registrations")
-      .select("id, full_name, status, division, bib_no, shirt_size, dob, created_at")
+      .select("id, full_name, status, division, bib_no, shirt_size, dob, created_at, entry_source")
       .eq("event_id", event.id)
       .order("created_at", { ascending: true });
     if (allErr) throw new Error(allErr.message);
@@ -131,34 +131,52 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
       bib_no: number | null;
       shirt_size: string | null;
       dob: string | null;
+      entry_source: string | null;
     };
     const all = (allRows ?? []) as unknown as Lite[];
 
     const sizeCounts: Record<string, number> = {};
+    const paidConfirmedBySize: Record<string, number> = {};
     const bibsByDivision: Record<string, number> = {};
     let paidConfirmed = 0;
     let registered = 0;
     const ageMismatchIds: string[] = [];
+    const staffAddedIds: string[] = [];
     const pendingBib: Array<{ id: string; full_name: string | null }> = [];
     for (const r of all) {
       if (r.status !== "cancelled" && r.shirt_size) {
         sizeCounts[r.shirt_size] = (sizeCounts[r.shirt_size] ?? 0) + 1;
       }
-      if (r.status === "paid" || r.status === "confirmed") paidConfirmed++;
+      if (r.status === "paid" || r.status === "confirmed") {
+        paidConfirmed++;
+        if (r.shirt_size) paidConfirmedBySize[r.shirt_size] = (paidConfirmedBySize[r.shirt_size] ?? 0) + 1;
+      }
       if (r.status === "registered") registered++;
       if (r.bib_no != null && r.division && r.status !== "cancelled") {
         bibsByDivision[r.division] = (bibsByDivision[r.division] ?? 0) + 1;
       }
       if (r.status !== "cancelled" && checkAgeClass(r.division, r.dob, event.date).mismatch) ageMismatchIds.push(r.id);
+      if (r.status !== "cancelled" && r.entry_source === "staff") staffAddedIds.push(r.id);
       if (r.status === "paid" && r.bib_no == null) pendingBib.push({ id: r.id, full_name: r.full_name });
     }
 
+    const filtered = ((rows ?? []) as unknown as EventRegistrationRow[]).filter(
+      (r) =>
+        (data.status !== "age_mismatch" || ageMismatchIds.includes(r.id)) &&
+        (data.status !== "staff_added" || staffAddedIds.includes(r.id)),
+    );
+
+    // Resolve added-by user ids to display names via the user's session.
+    const addedByNames = await lookupNames(
+      context.supabase,
+      [...new Set(filtered.map((r) => r.added_by).filter((v): v is string => !!v))],
+    );
+
     return {
       event,
-      registrations: ((rows ?? []) as unknown as EventRegistrationRow[]).filter(
-        (r) => data.status !== "age_mismatch" || ageMismatchIds.includes(r.id),
-      ),
+      registrations: filtered,
       sizeCounts,
+      paidConfirmedBySize,
       capacity: {
         paidConfirmed,
         registered,
@@ -167,6 +185,8 @@ export const listEventRegistrations = createServerFn({ method: "POST" })
       },
       pendingBib,
       ageMismatchIds,
+      staffAddedIds,
+      addedByNames,
     };
   });
 
