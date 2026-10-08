@@ -206,15 +206,12 @@ export const getEventRegistration = createServerFn({ method: "POST" })
     return reg;
   });
 
-// Resolve uploader user ids to display names via the user's session.
+// Resolve user ids to display names via the user's session.
 // Falls back silently when RLS hides the row (UI shows "staff").
-async function lookupUploaderNames(
+async function lookupNames(
   sb: { from: (t: string) => unknown },
-  reg: EventRegistrationRow,
+  ids: string[],
 ): Promise<Record<string, string>> {
-  const ids = [reg.payment_proof_uploaded_by, reg.nrc_photo_uploaded_by, reg.nrc_photo_back_uploaded_by].filter(
-    (v): v is string => !!v,
-  );
   const out: Record<string, string> = {};
   if (ids.length === 0) return out;
   type Q = { select: (c: string) => { in: (c: string, v: string[]) => Promise<{ data: unknown }> } };
@@ -231,6 +228,19 @@ async function lookupUploaderNames(
     /* ignore */
   }
   return out;
+}
+
+async function lookupUploaderNames(
+  sb: { from: (t: string) => unknown },
+  reg: EventRegistrationRow,
+): Promise<Record<string, string>> {
+  const ids = [
+    reg.payment_proof_uploaded_by,
+    reg.nrc_photo_uploaded_by,
+    reg.nrc_photo_back_uploaded_by,
+    reg.added_by,
+  ].filter((v): v is string => !!v);
+  return lookupNames(sb, ids);
 }
 
 export const getProofSignedUrl = createServerFn({ method: "POST" })
