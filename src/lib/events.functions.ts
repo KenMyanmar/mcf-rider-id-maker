@@ -392,6 +392,181 @@ export const updateRegistrationInfo = createServerFn({ method: "POST" })
     return row as unknown as EventRegistrationRow;
   });
 
+const DupInput = z.object({
+  slug: z.string().min(1),
+  phone: z.string().max(40).optional(),
+  nrc: z.string().max(80).optional(),
+});
+
+/** Non-cancelled riders in this race whose phone (last 8 digits) or NRC matches. */
+export const findEventDuplicates = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: z.input<typeof DupInput>) => DupInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: ev, error: evErr } = await context.supabase
+      .from("events")
+      .select("id")
+      .eq("slug", data.slug)
+      .eq("published", true)
+      .maybeSingle<{ id: string }>();
+    if (evErr) throw new Error(evErr.message);
+    if (!ev) throw new Error("Event not found");
+
+    const phone = (data.phone ?? "").trim();
+    const nrc = (data.nrc ?? "").trim();
+    if (!phone && !nrc) return [];
+
+    type Row = { id: string; reference_no: string | null; full_name: string | null; phone: string | null; nrc: string | null; status: string };
+    const matches: Row[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: pageRows, error } = await context.supabase
+        .from("event_registrations")
+        .select("id, reference_no, full_name, phone, nrc, status")
+        .eq("event_id", ev.id)
+        .neq("status", "cancelled")
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      for (const r of (pageRows ?? []) as unknown as Row[]) {
+        if ((phone && r.phone && phonesMatch(phone, r.phone)) || (nrc && r.nrc && nrcMatches(nrc, r.nrc))) {
+          matches.push(r);
+        }
+      }
+      if (!pageRows || pageRows.length < PAGE) break;
+    }
+    return matches;
+  });
+
+const AddRiderInput = z.object({
+  slug: z.string().min(1),
+  full_name: z.string().trim().min(2).max(120),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^[0-9+\- ]{5,30}$/, "Phone may contain only digits, + and -"),
+  nrc: opt(80),
+  father_name: opt(120),
+  dob: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => {
+      if (!v) return true;
+      const d = new Date(v);
+      return /^\d{4}-\d{2}-\d{2}$/.test(v) && !isNaN(d.getTime()) && d < new Date();
+    }, "Date of birth must be a valid past date"),
+  address: opt(300),
+  division: z.string().min(1),
+  team_club: opt(120),
+  note: opt(500),
+  blood_type: z
+    .enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown", ""])
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
+  emergency_contact_name: opt(120),
+  emergency_contact_phone: z
+    .string()
+    .trim()
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => !v || /^[0-9+\- ]{5,30}$/.test(v), "Emergency phone may contain only digits, + and -"),
+  shirt_size: opt(20),
+  waiverAccepted: z.boolean(),
+});
+
+/**
+ * Staff/organizer adds a rider after public registration closed. The insert
+ * runs under the caller's session (RLS decides); the database sets
+ * entry_source='staff', added_by, status='registered', bib_no=null and
+ * reference_no — none of those are sent. waiver_accepted_at is stamped from
+ * the server clock, never the browser's.
+ */
+export const addEventRegistration = createServerFn({ method: "POST" })
+  .middleware([requireStaffOrOrganizer])
+  .inputValidator((input: z.input<typeof AddRiderInput>) => AddRiderInput.parse(input))
+  .handler(async ({ data, context }) => {
+    const { data: ev, error: evErr } = await context.supabase
+      .from("events")
+      .select("id, divisions, shirt_sizes, shirt_stock")
+      .eq("slug", data.slug)
+      .eq("published", true)
+      .maybeSingle<{
+        id: string;
+        divisions: { id: string }[] | null;
+        shirt_sizes: string[] | null;
+        shirt_stock: Record<string, number> | null;
+      }>();
+    if (evErr) throw new Error(evErr.message);
+    if (!ev) throw new Error("Event not found");
+
+    if (!(ev.divisions ?? []).some((d) => d.id === data.division)) {
+      throw new Error("Class is not valid for this event");
+    }
+    if (data.shirt_size && !(ev.shirt_sizes ?? []).includes(data.shirt_size)) {
+      throw new Error("Jersey size is not valid for this event");
+    }
+    if (!data.waiverAccepted) {
+      throw new Error("The waiver must be confirmed before adding a rider");
+    }
+
+    // Sold-out jersey check: stock minus paid/confirmed riders of that size.
+    if (data.shirt_size && ev.shirt_stock) {
+      const { data: takenRows, error: takenErr } = await context.supabase
+        .from("event_registrations")
+        .select("id")
+        .eq("event_id", ev.id)
+        .eq("shirt_size", data.shirt_size)
+        .in("status", ["paid", "confirmed"]);
+      if (takenErr) throw new Error(takenErr.message);
+      const left = sizeLeft(ev.shirt_stock, data.shirt_size, {
+        [data.shirt_size]: (takenRows ?? []).length,
+      });
+      if (left <= 0) {
+        throw new Error(`No ${data.shirt_size} jerseys left. Choose another size.`);
+      }
+    }
+
+    const payload = {
+      event_id: ev.id,
+      full_name: data.full_name,
+      phone: data.phone,
+      nrc: data.nrc,
+      father_name: data.father_name,
+      dob: data.dob,
+      address: data.address,
+      division: data.division,
+      team_club: data.team_club,
+      note: data.note,
+      blood_type: data.blood_type,
+      emergency_contact_name: data.emergency_contact_name,
+      emergency_contact_phone: data.emergency_contact_phone,
+      shirt_size: data.shirt_size,
+      waiver_accepted_at: new Date().toISOString(),
+    };
+    const { data: row, error } = await (context.supabase
+      .from("event_registrations") as unknown as {
+      insert: (p: typeof payload) => {
+        select: (cols: string) => {
+          single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        };
+      };
+    })
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) {
+      if (error.message.toLowerCase().includes("row-level security")) {
+        throw new Error("Permission denied — only staff and this event's organizers can add riders.");
+      }
+      throw new Error(error.message);
+    }
+    const reg = row as unknown as EventRegistrationRow;
+    reg.uploader_names = await lookupNames(context.supabase, reg.added_by ? [reg.added_by] : []);
+    return reg;
+  });
+
 const UpdateStatusInput = z.object({
   id: z.string().min(1),
   status: z.enum(["registered", "paid", "confirmed", "cancelled"]),
