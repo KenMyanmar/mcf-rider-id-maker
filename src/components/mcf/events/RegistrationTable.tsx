@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
 import { EditRegistrationDialog } from "./EditRegistrationDialog";
-import { Download, Search, Eye, X, AlertTriangle } from "lucide-react";
+import { AddRiderDrawer } from "./AddRiderDrawer";
+import { Download, Search, Eye, X, AlertTriangle, UserPlus } from "lucide-react";
 import { checkAgeClass, formatAge } from "@/lib/age-class";
 
 function findDivision(event: EventRow | null, id: string | null): EventDivision | undefined {
@@ -81,6 +82,10 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [sizeCounts, setSizeCounts] = useState<Record<string, number>>({});
+  const [staffAddedIds, setStaffAddedIds] = useState<string[]>([]);
+  const [addedByNames, setAddedByNames] = useState<Record<string, string>>({});
+  const [paidConfirmedBySize, setPaidConfirmedBySize] = useState<Record<string, number>>({});
+  const [addOpen, setAddOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -97,9 +102,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           event: EventRow;
           registrations: EventRegistrationRow[];
           sizeCounts: Record<string, number>;
+          paidConfirmedBySize?: Record<string, number>;
           capacity: Capacity;
           pendingBib: Array<{ id: string; full_name: string | null }>;
           ageMismatchIds: string[];
+          staffAddedIds?: string[];
+          addedByNames?: Record<string, string>;
         };
         setAgeMismatchIds(res.ageMismatchIds ?? []);
         setCapacity(res.capacity);
@@ -107,6 +115,9 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         setEvent(res.event);
         setRows(res.registrations);
         setSizeCounts(res.sizeCounts ?? {});
+        setStaffAddedIds(res.staffAddedIds ?? []);
+        setAddedByNames(res.addedByNames ?? {});
+        setPaidConfirmedBySize(res.paidConfirmedBySize ?? {});
         setError(null);
       })
       .catch((e) => setError((e as Error).message))
