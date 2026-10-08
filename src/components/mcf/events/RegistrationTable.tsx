@@ -333,6 +333,10 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       "Created at": r.created_at ?? "",
       "Last status change": r.status_updated_at ?? "",
       Note: r.status_note ?? "",
+      "Added by":
+        r.entry_source === "staff"
+          ? (r.added_by && addedByNames[r.added_by]) || "staff"
+          : "",
       DOB: r.dob ?? "",
       "Age on race day": formatAge(r.dob ?? null, event?.date ?? null) ?? "",
       "Age check": ageCheck(event, r).mismatch
@@ -373,6 +377,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <option value="proof_not_paid">Has proof, not yet Paid</option>
           <option value="no_proof">No proof yet</option>
           <option value="age_mismatch">Age mismatch</option>
+          <option value="staff_added">Added by staff</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s).mm} ({statusLabel(s).en})
@@ -391,7 +396,11 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
             </option>
           ))}
         </select>
-        <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5 ml-auto">
+        <Button size="sm" className="gap-1.5 ml-auto" onClick={() => setAddOpen(true)}>
+          <UserPlus className="h-3.5 w-3.5" />
+          Add rider
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5">
           <Download className="h-3.5 w-3.5" />
           Export Excel
         </Button>
