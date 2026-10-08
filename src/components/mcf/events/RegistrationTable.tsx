@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { STATUS_ORDER, statusLabel, statusBadgeClass } from "./status";
 import { EditRegistrationDialog } from "./EditRegistrationDialog";
-import { Download, Search, Eye, X, AlertTriangle } from "lucide-react";
+import { AddRiderDrawer } from "./AddRiderDrawer";
+import { Download, Search, Eye, X, AlertTriangle, UserPlus } from "lucide-react";
 import { checkAgeClass, formatAge } from "@/lib/age-class";
 
 function findDivision(event: EventRow | null, id: string | null): EventDivision | undefined {
@@ -81,6 +82,10 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
   const [saving, setSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [sizeCounts, setSizeCounts] = useState<Record<string, number>>({});
+  const [staffAddedIds, setStaffAddedIds] = useState<string[]>([]);
+  const [addedByNames, setAddedByNames] = useState<Record<string, string>>({});
+  const [paidConfirmedBySize, setPaidConfirmedBySize] = useState<Record<string, number>>({});
+  const [addOpen, setAddOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -97,9 +102,12 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           event: EventRow;
           registrations: EventRegistrationRow[];
           sizeCounts: Record<string, number>;
+          paidConfirmedBySize?: Record<string, number>;
           capacity: Capacity;
           pendingBib: Array<{ id: string; full_name: string | null }>;
           ageMismatchIds: string[];
+          staffAddedIds?: string[];
+          addedByNames?: Record<string, string>;
         };
         setAgeMismatchIds(res.ageMismatchIds ?? []);
         setCapacity(res.capacity);
@@ -107,6 +115,9 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
         setEvent(res.event);
         setRows(res.registrations);
         setSizeCounts(res.sizeCounts ?? {});
+        setStaffAddedIds(res.staffAddedIds ?? []);
+        setAddedByNames(res.addedByNames ?? {});
+        setPaidConfirmedBySize(res.paidConfirmedBySize ?? {});
         setError(null);
       })
       .catch((e) => setError((e as Error).message))
@@ -322,6 +333,10 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
       "Created at": r.created_at ?? "",
       "Last status change": r.status_updated_at ?? "",
       Note: r.status_note ?? "",
+      "Added by":
+        r.entry_source === "staff"
+          ? (r.added_by && addedByNames[r.added_by]) || "staff"
+          : "",
       DOB: r.dob ?? "",
       "Age on race day": formatAge(r.dob ?? null, event?.date ?? null) ?? "",
       "Age check": ageCheck(event, r).mismatch
@@ -362,6 +377,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           <option value="proof_not_paid">Has proof, not yet Paid</option>
           <option value="no_proof">No proof yet</option>
           <option value="age_mismatch">Age mismatch</option>
+          <option value="staff_added">Added by staff</option>
           {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {statusLabel(s).mm} ({statusLabel(s).en})
@@ -380,7 +396,11 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
             </option>
           ))}
         </select>
-        <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5 ml-auto">
+        <Button size="sm" className="gap-1.5 ml-auto" onClick={() => setAddOpen(true)}>
+          <UserPlus className="h-3.5 w-3.5" />
+          Add rider
+        </Button>
+        <Button variant="outline" size="sm" onClick={exportExcel} className="gap-1.5">
           <Download className="h-3.5 w-3.5" />
           Export Excel
         </Button>
@@ -479,7 +499,17 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                 <tr key={r.id} className="border-b border-neutral-100 hover:bg-neutral-50">
                   <td className="px-3 py-2 font-mono font-semibold">{r.bib_no ?? "—"}</td>
                   <td className="px-3 py-2 font-mono text-xs">{r.reference_no ?? "—"}</td>
-                  <td className="px-3 py-2 font-medium">{r.full_name ?? "—"}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {r.full_name ?? "—"}
+                    {staffAddedIds.includes(r.id) ? (
+                      <span
+                        title={r.added_by && addedByNames[r.added_by] ? `Added by ${addedByNames[r.added_by]}` : "Added by staff"}
+                        className="ml-1.5 inline-block rounded bg-neutral-100 px-1 align-middle text-[10px] font-medium text-neutral-600"
+                      >
+                        staff
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-2">{r.phone ?? "—"}</td>
                   {(() => {
                     const chk = ageCheck(event, r);
@@ -580,6 +610,7 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
                       ["Address", detail.address ?? null],
                       ["Note", detail.note ?? null],
                       ["Waiver accepted", detail.waiver_accepted_at ? new Date(detail.waiver_accepted_at).toLocaleString() : null],
+                      ["Added", detail.entry_source === "staff" ? `Staff${detail.added_by && addedByNames[detail.added_by] ? ` — ${addedByNames[detail.added_by]}` : ""}` : null],
                       ["Created", detail.created_at ? new Date(detail.created_at).toLocaleString() : null],
                       ["Last status change", detail.status_updated_at ? new Date(detail.status_updated_at).toLocaleString() : null],
                       ["Last edited", detail.info_updated_at ? new Date(detail.info_updated_at).toLocaleString() : null],
@@ -719,6 +750,20 @@ export function RegistrationTable({ slug, isAdmin }: { slug: string; isAdmin: bo
           </div>
         </div>
       )}
+      {event ? (
+        <AddRiderDrawer
+          event={event}
+          paidConfirmedBySize={paidConfirmedBySize}
+          usedBibs={capacity.usedBibs ?? []}
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          onAdded={(row) => {
+            load();
+            void openDetail(row.id);
+          }}
+          onOpenExisting={(id) => void openDetail(id)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -770,6 +815,11 @@ function CapacityPanel({ event, capacity }: { event: EventRow | null; capacity: 
                 </span>
               );
             })}
+          </div>
+        ) : null}
+        {cap && capacity.paidConfirmed > cap ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+            Paid + Confirmed {capacity.paidConfirmed} — over the cap of {cap} by {capacity.paidConfirmed - cap} / စာရင်းသတ်မှတ်ထားသောအရေအတွက်ထက် ကျော်နေသည်
           </div>
         ) : null}
       </div>

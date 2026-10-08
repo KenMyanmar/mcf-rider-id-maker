@@ -10,3 +10,4 @@
 - [x] Excel export: Address after Phone (wide column), exportAll paged fetch (1000/page) covering all filtered rows, toast with total count
 - [x] Removed silent 500-row cap on the on-screen list (paged main query)
 - [x] Two bib blocks per class; used = any race bib in class blocks
+- [x] Add rider flow: drawer, live age/duplicate/stock checks, staff traceability, over-cap amber line

@@ -84,6 +84,7 @@ export interface EventRow {
   date: string | null;
   divisions: EventDivision[] | null;
   shirt_sizes: string[] | null;
+  shirt_stock?: Record<string, number> | null;
   max_participants: number | null;
   published: boolean;
 }
@@ -124,6 +125,8 @@ export interface EventRegistrationRow {
   emergency_contact_phone?: string | null;
   shirt_size?: string | null;
   waiver_accepted_at?: string | null;
+  entry_source?: string | null;
+  added_by?: string | null;
 }
 
 export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "unknown"] as const;
